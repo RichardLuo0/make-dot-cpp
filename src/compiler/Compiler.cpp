@@ -1,0 +1,46 @@
+using Path = fs::path;
+
+struct ModuleInfo {
+  bool exported = false;
+  std::string name;
+  std::deque<std::string> deps;
+};
+
+export class Compiler {
+ public:
+  virtual ~Compiler() = default;
+
+  virtual Compiler &addOption(std::string option) = 0;
+  virtual Compiler &addLinkOption(std::string option) = 0;
+
+#define GENERATE_COMPILE_METHOD(NAME, ARGS)    \
+  virtual Process::Result NAME ARGS const = 0; \
+  virtual std::string NAME##Command ARGS const = 0;
+
+  GENERATE_COMPILE_METHOD(compile,
+                          (const Path &input, const Path &output,
+                           bool isDebug = false,
+                           const std::optional<Path> &modulePath = std::nullopt,
+                           const std::string &extraOptions = ""));
+
+  GENERATE_COMPILE_METHOD(link, (const std::vector<Path> &input,
+                                 const Path &output, bool isDebug = false,
+                                 const std::string &extraOptions = ""));
+
+  GENERATE_COMPILE_METHOD(compilePCM, (const Path &input, const Path &output,
+                                       const Path &modulePath,
+                                       const std::string &extraOptions = ""));
+
+  GENERATE_COMPILE_METHOD(archive, (const std::vector<Path> &input,
+                                    const Path &output, bool isDebug = false));
+#undef GENERATE_COMPILE_METHOD
+
+  virtual std::deque<Path> getIncludeDeps(const Path &input) const = 0;
+
+  virtual ModuleInfo getModuleInfo(const Path &input) const = 0;
+
+ protected:
+  void ensureParentExists(const Path &path) const {
+    fs::create_directories(path.parent_path());
+  }
+};

@@ -1,0 +1,123 @@
+module;
+#include <bitset>
+#include <functional>
+#include <future>
+#include <list>
+#include <vector>
+
+export module makeDotCpp.Thread:DepGraph;
+
+import :ThreadPool;
+
+// alg1: Build a tree with each node of sizeof(std::size_t) children.
+// space: O(n\log_{64}n)
+// time: O(n\log_{64}n)
+class State {
+ private:
+  using bitsetSize = std::numeric_limits<std::size_t>::digits;
+  using Bitset = std::bitset<bitsetSize>;
+  // First bit is used for depending on previous BitSet
+  using actualSize = bitsetSize - 1;
+
+  Bitset bitset;
+  std::vector<State> bitsetList;
+
+  std::size_t depth = 0;
+
+ public:
+  void set(std::size_t id) {
+    std::size_t idInBitSet = id % actualSize;
+    std::size_t curBitSet = id / actualSize;
+    if (curBitSet >= bitSetList.size())
+      bitSetList.resize(curBitSet + 1, Bitset{1});
+    bitSetList[curBitSet].set(idInBitSet);
+  }
+
+  bool test(std::size_t id, Bitset depend) {
+    std::size_t curBitSet = id / actualSize;
+    if (depend.test(0))
+      return curBitSet == 0;
+    else
+      return (depend & bitSetList[curBitSet]) == depend;
+  }
+
+  template <typename Iterable>
+  Bitset generateDepend(std::size_t id, const Iterable& depIdList = {}) {
+    Bitset depend;
+    std::size_t previousNodes = id - id % actualSize;
+    for (auto& depId : depIdList) {
+      if (depId < previousNodes)
+        depend.set(0) else depIds.set(depId - previousNodes + 1);
+    }
+    return depend;
+  }
+}
+
+// !!! This does not check for cycle
+export template <typename RetType>
+class DepGraph {
+ private:
+  using ThreadPool = ThreadPool<RetType>;
+
+  struct Node {
+    friend class DepGraph;
+
+   private:
+    ThreadPool::Task task;
+    const Bitset depIds;
+
+   public:
+    const std::size_t id;
+
+    Node(const std::size_t& id, const std::bitset<64>& depIds,
+         std::function<RetType()>&& callable)
+        : id(id), depIds(depIds), task(std::move(callable)) {}
+
+    std::future<RetType> takeFuture() { return task.get_future(); }
+  };
+
+  ThreadPool* threadPool = nullptr;
+  std::list<Node> nodeList;
+  std::vector<Bitset> state(1);
+  std::size_t nodeCount = 0;
+
+  std::mutex mutex;
+
+ public:
+  template <typename Iterable = std::initializer_list<std::size_t>>
+  Node& addNode(const std::function<RetType()>& callable,
+                const Iterable& depIdList = {}) noexcept {
+    Bitset depIds;
+    for (auto& dep : depIdList) {
+      depIds.set(dep);
+    }
+    std::lock_guard lock(mutex);
+    return nodeList.emplace_back(nodeCount, depIds,
+                                 [&, callable, nodeCount = this->nodeCount] {
+                                   callable();
+                                   std::lock_guard lock(mutex);
+                                   state->set(nodeCount);
+                                   postDepTask();
+                                 });
+  }
+
+  void runOn(ThreadPool& threadPool) {
+    this->threadPool = &threadPool;
+    std::lock_guard lock(mutex);
+    postDepTask();
+  }
+
+  void stop() { this->threadPool = nullptr; }
+
+ private:
+  void postDepTask() {
+    if (threadPool != nullptr)
+      nodeList.remove_if([&](Node& node) {
+        if ((node.depIds & *state) == node.depIds) {
+          this->threadPool->post(std::move(node.task));
+          return true;
+        } else
+          return false;
+      });
+  }
+};

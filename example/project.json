@@ -1,0 +1,13 @@
+{
+  "name": "example",
+  "dev": {
+    "compiler": "clang++",
+    "debug": true,
+    "packages": [
+      {
+        "name": "makeDotCpp",
+        "path": "C:\\Users\\Richard\\App\\make-dot-cpp"
+      }
+    ]
+  }
+}
