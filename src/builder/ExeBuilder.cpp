@@ -27,27 +27,24 @@ export struct ExeTarget : public Target {
       const auto &nodeOpt = dep.get().build(ctx);
       if (nodeOpt.has_value()) nodeList.emplace_back(nodeOpt.value());
     }
-    auto objView = deps | std::views::transform([&](const Target &target) {
-                     return target.getOutput(ctx);
+    auto objView = deps | std::views::transform([&](auto &&target) {
+                     return target.get().getOutput(ctx);
                    });
-    std::vector<Path> objList{objView.begin(), objView.end()};
     const Path output = getOutput(ctx);
     if (!objView.empty() && ctx.isNeedUpdate(output, objView)) {
-      return ctx.link(objList, output, nodeList);
+      return ctx.link({objView.begin(), objView.end()}, output, nodeList);
     }
     return std::nullopt;
   }
 };
 
-export class ExeBuilder : public Builder {
+export class ExeBuilder : public ObjBuilder {
  protected:
-  mutable std::unique_ptr<ExeTarget> target;
-
-  const Target &onBuild(const Context &ctx,
-                        const std::deque<ObjTarget> &objList) const override {
-    target = std::make_unique<ExeTarget>(name + POSTFIX);
-    target->dependOn(objList);
-    target->dependOn(buildExportLibList());
-    return *target;
+  TargetList onBuild() const override {
+    TargetList list(std::in_place_type<ExeTarget>, name + POSTFIX);
+    auto &target = list.getTarget<ExeTarget>();
+    target.dependOn(list.append(buildObjTargetList()));
+    target.dependOn(buildExportLibList());
+    return list;
   }
 };

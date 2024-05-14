@@ -31,6 +31,7 @@ export defException(CompileError, (), "compile error");
 #include "Targets.cpp"
 #include "Export.cpp"
 #include "Builder.cpp"
+#include "ObjBuilder.cpp"
 #include "ExeBuilder.cpp"
 #include "LibBuilder.cpp"
 }  // namespace makeDotCpp

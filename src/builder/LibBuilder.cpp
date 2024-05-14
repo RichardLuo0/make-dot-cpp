@@ -20,44 +20,36 @@ export struct LibTarget : public Target {
   }
 
   std::optional<Ref<Node>> onBuild(BuilderContext &parentCtx) const override {
-    BuilderContext ctx(
-        this->ctx.has_value() ? this->ctx.value() : parentCtx.ctx,
+    BuilderContextChild ctx(
+        parentCtx, this->ctx.has_value() ? this->ctx.value() : parentCtx.ctx,
         parentCtx.compiler, compilerOptions);
     NodeList nodeList;
     for (auto &dep : deps) {
       const auto &nodeOpt = dep.get().build(ctx);
       if (nodeOpt.has_value()) nodeList.emplace_back(nodeOpt.value());
     }
-    auto objView = deps | std::views::transform([&](const Target &target) {
-                     return target.getOutput(ctx);
+    auto objView = deps | std::views::transform([&](auto &&target) {
+                     return target.get().getOutput(ctx);
                    });
-    std::vector<Path> objList{objView.begin(), objView.end()};
     const Path output = getOutput(ctx);
     if (!objView.empty() && ctx.isNeedUpdate(output, objView)) {
-      return ctx.archive(objList, output, nodeList);
+      return ctx.archive({objView.begin(), objView.end()}, output, nodeList);
     }
-    parentCtx.merge(ctx);
     return std::nullopt;
   }
 };
 
-export class LibBuilder : public Builder {
+export class LibBuilder : public ObjBuilder {
  protected:
   struct LibExport : public Export {
    private:
-    LibTarget target;
     ModuleMap moduleMap;
-    const std::deque<ObjTarget> objList;
+    TargetList targetList;
 
    public:
-    LibExport(const LibBuilder &parent,
+    LibExport(const LibBuilder &builder,
               const std::optional<Context> &ctx = std::nullopt)
-        : target("lib" + parent.name + ".a", ctx, parent.compilerOptions),
-          objList(
-              parent.buildObjTargetList(parent.buildUnitList(), moduleMap)) {
-      target.dependOn(objList);
-      target.dependOn(parent.buildExportLibList());
-    }
+        : targetList(builder.onBuild(moduleMap, ctx)) {}
 
     virtual std::optional<Ref<const Target>> findPCM(
         const std::string &moduleName) const override {
@@ -67,21 +59,15 @@ export class LibBuilder : public Builder {
     };
 
     std::optional<Ref<const Target>> getLibrary() const override {
-      return target;
+      return targetList.getTarget();
     };
   };
-
-  void createExportIfNull() const {
-    if (ex != nullptr) return;
-    prepareCompilerOptions();
-    ex = std::make_shared<LibExport>(*this);
-  }
 
  public:
   mutable std::shared_ptr<LibExport> ex;
 
   std::shared_ptr<Export> getExport() const {
-    createExportIfNull();
+    if (ex == nullptr) ex = std::make_shared<LibExport>(*this);
     return ex;
   }
 
@@ -94,11 +80,19 @@ export class LibBuilder : public Builder {
     return ex;
   }
 
-  BuildResult build(const Context &ctx) const override {
-    createExportIfNull();
-    const auto &target = ex->getLibrary().value().get();
-    BuilderContext builderCtx{ctx, compiler, compilerOptions};
-    ctx.run();
-    return {target.getOutput(builderCtx), builderCtx.takeFutureList()};
-  };
+  TargetList onBuild(ModuleMap &map,
+                     const std::optional<Context> &ctx = std::nullopt) const {
+    prepareCompilerOptions();
+    TargetList list(std::in_place_type<LibTarget>, "lib" + name + ".a", ctx,
+                    compilerOptions);
+    auto &target = list.getTarget<ExeTarget>();
+    target.dependOn(list.append(buildObjTargetList(map)));
+    target.dependOn(buildExportLibList());
+    return list;
+  }
+
+  TargetList onBuild() const override {
+    ModuleMap map;
+    return onBuild(map);
+  }
 };

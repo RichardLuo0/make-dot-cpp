@@ -38,7 +38,36 @@ export class Builder {
   friend struct BuilderContext;
 
   using UnitList = std::vector<Unit>;
-  using ModuleMap = std::unordered_map<std::string, Ref<const Target>>;
+
+  struct TargetList {
+   private:
+    std::unique_ptr<Target> target;
+    std::deque<std::unique_ptr<const Target>> list;
+
+   public:
+    template <class T>
+    TargetList(std::in_place_type_t<T>, auto &&...args) {
+      target = std::make_unique<T>(std::forward<decltype(args)>(args)...);
+    }
+
+    auto append(std::ranges::range auto &&anotherList) {
+      std::vector<Ref<const Target>> targetRefList;
+      targetRefList.reserve(anotherList.size());
+      for (auto &t : anotherList) {
+        targetRefList.emplace_back(*t);
+      }
+      std::move(anotherList.begin(), anotherList.end(),
+                std::back_inserter(list));
+      return targetRefList;
+    }
+
+    const Target &at(std::size_t i) const { return *list.at(i); }
+
+    template <class T = Target>
+    auto &getTarget() const {
+      return static_cast<T &>(*target);
+    }
+  };
 
  protected:
   chainVar(std::string, name, "defaultName", setName);
@@ -129,53 +158,6 @@ export class Builder {
     return unitList;
   }
 
-  auto buildObjTargetList(const UnitList &unitList,
-                          ModuleMap &moduleMap) const {
-    std::deque<ObjTarget> result;
-    std::vector<std::pair<Ref<ObjTarget>, Ref<const Unit>>> targetList;
-    targetList.reserve(unitList.size());
-    // Create ObjTarget;
-    for (auto &unit : unitList) {
-      ObjTarget *obj;
-      const auto objPath = absoluteProximate(unit.input) += ".obj";
-      if (unit.exported) {
-        obj = &result.emplace_back(unit.input, unit.includeDeps, objPath,
-                                   replace(unit.moduleName, ':', '-') + ".pcm");
-        moduleMap.emplace(unit.moduleName, obj->getPCM());
-      } else
-        obj = &result.emplace_back(unit.input, unit.includeDeps, objPath);
-      targetList.emplace_back(*obj, unit);
-    }
-    // Create depends with modules
-    for (auto &pair : targetList) {
-      auto &target = pair.first.get();
-      const auto &unit = pair.second.get();
-      for (auto &dep : unit.moduleDeps) {
-        const auto it = moduleMap.find(dep);
-        if (it != moduleMap.end())
-          target.dependOn(it->second);
-        else {
-          bool isFound = false;
-          for (auto &ex : exSet) {
-            const auto moduleOpt = ex->findPCM(dep);
-            if (moduleOpt.has_value()) {
-              target.dependOn(moduleOpt.value());
-              isFound = true;
-              break;
-            }
-          }
-          if (!isFound) throw ModuleNotFound(unit.input, dep);
-        }
-      }
-    }
-    return result;
-  }
-
-  auto buildObjTargetList(const UnitList &unitList) const {
-    ModuleMap moduleMap;
-    return buildObjTargetList(unitList, moduleMap);
-  }
-
   auto buildExportLibList() const {
     std::deque<Ref<const Target>> libList;
     for (auto &ex : exSet) {
@@ -195,10 +177,7 @@ export class Builder {
     }
   }
 
-  virtual const Target &onBuild(const Context &ctx,
-                                const std::deque<ObjTarget> &objList) const {
-    return emptyTarget;
-  };
+  virtual TargetList onBuild() const = 0;
 
  public:
   void buildCompileCommands(const Context &ctx) const {
@@ -219,8 +198,8 @@ export class Builder {
 
   virtual BuildResult build(const Context &ctx) const {
     prepareCompilerOptions();
-    const auto objList = buildObjTargetList(buildUnitList());
-    const auto &target = onBuild(ctx, objList);
+    const auto targetList = onBuild();
+    const auto &target = targetList.getTarget();
     BuilderContext builderCtx{ctx, compiler, compilerOptions};
     target.build(builderCtx);
     ctx.run();
