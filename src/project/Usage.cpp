@@ -41,11 +41,15 @@ struct Usage : public Export {
   std::optional<Ref<const Target>> findPCM(
       const std::string& moduleName) const override {
     if (!pcmPath.has_value()) return std::nullopt;
-    auto modulePath =
-        pcmPath.value() / (replace(moduleName, ':', '-') + ".pcm");
-    if (!fs::exists(modulePath)) return std::nullopt;
-    if (!cache.contains(moduleName)) cache.emplace(moduleName, modulePath);
-    return cache.at(moduleName);
+    const auto it = cache.find(moduleName);
+    if (it != cache.end())
+      return it->second;
+    else {
+      auto modulePath =
+          pcmPath.value() / (replace(moduleName, ':', '-') + ".pcm");
+      if (!fs::exists(modulePath)) return std::nullopt;
+      return cache.emplace(moduleName, modulePath).first->second;
+    }
   };
 
  private:

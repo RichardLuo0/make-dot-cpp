@@ -12,11 +12,10 @@ using namespace makeDotCpp;
 
 defException(ProjectNotBuildable, (std::string name),
              name + " is not buildable");
-
 defException(CyclicDependency, (fs::path path),
              "detected cyclic dependency: " + path.generic_string());
 
-Context ctx{"build", ".build"};
+fs::path output = fs::weakly_canonical(".build");
 std::shared_ptr<Compiler> compiler = std::make_shared<Clang>();
 
 void populateDepends(std::unordered_set<fs::path>& currentDeps,
@@ -50,7 +49,7 @@ std::optional<std::shared_ptr<Export>> buildPackage(
   populateDepends(currentDeps, projectDesc, builder, packagesPath);
   return builder.createExport(
       fs::is_directory(path) ? path : path.parent_path(),
-      ctx.output / projectDesc.name);
+      output / projectDesc.name);
 }
 
 ProjectDesc findBuiltPackage(fs::path path, const fs::path& packagesPath) {
@@ -96,13 +95,14 @@ int main(int argc, const char** argv) {
   const auto projectDesc = ProjectDesc::create(projectPath, packagesPath);
 
   if (!projectDesc.dev.has_value()) throw ProjectNotBuildable(projectDesc.name);
-  const auto dev = projectDesc.dev.value();
+  const auto& dev = projectDesc.dev.value();
 
   ExeBuilder builder;
   builder.setName("build").addSrc(dev.buildFile);
   std::unordered_set<fs::path> currentDeps{projectPath};
   populateDepends(currentDeps, projectDesc, builder, packagesPath);
 
+  Context ctx{"build", output, dev.debug};
   const auto result = builder.setCompiler(compiler).build(ctx);
 
   try {

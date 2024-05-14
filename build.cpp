@@ -44,7 +44,7 @@ int main(int argc, const char **argv) {
         try {
           future.get();
           std::cout << "\033[0;32mDone\033[0m" << std::endl;
-        } catch (const CompileError &e) {
+        } catch (const std::exception &e) {
           std::cout << "\033[0;31mError: " << e.what() << "\033[0m"
                     << std::endl;
           throw e;

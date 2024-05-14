@@ -1,24 +1,24 @@
 template <class T>
 class QuickRemoveList : public std::list<T> {
  private:
-  using Parent = std::list<T>;
+  using Base = std::list<T>;
 
  public:
   struct ItemWrapper {
     friend class QuickRemoveList;
 
    private:
-    Parent::const_iterator it;
+    Base::const_iterator it;
   };
 
   template <class... Args>
   T& emplace_back(Args&&... args) {
-    T& item = Parent::emplace_back(std::forward<Args>(args)...);
-    item.it = --Parent::end();
+    T& item = Base::emplace_back(std::forward<Args>(args)...);
+    item.it = --Base::end();
     return item;
   }
 
-  void erase(const T& item) { Parent::erase(item.it); }
+  void erase(const T& item) { Base::erase(item.it); }
 };
 
 // alg2
@@ -49,17 +49,15 @@ export class DepGraph {
     }
 
    public:
-    Node(DepGraph& graph, const std::function<Func>&& callable)
+    Node(DepGraph& graph, const std::function<Func>& callable)
         : task([&, callable](ThreadPool& threadPool) {
-            const auto& ret = callable(graph);
+            auto ret = callable(graph);
             std::lock_guard lock(graph.mutex);
             state = Finished;
-            for (auto& parentRef : parents) {
-              auto& parent = parentRef.get();
-              parent.children--;
-              if (graph.threadPool)
-                parent.run(*graph.threadPool, parents.size() != 1);
-            }
+            for (auto& parentRef : parents) parentRef.get().children--;
+            if (graph.threadPool)
+              for (auto& parentRef : parents)
+                parentRef.get().run(*graph.threadPool, parents.size() != 1);
             graph.removeNode(*this);
             return ret;
           }) {
@@ -68,6 +66,7 @@ export class DepGraph {
 
     std::future<RetType>&& takeFuture() { return std::move(future); }
 
+   private:
     void run(ThreadPool& threadPool, bool newThreadHint = true) {
       if (state == Pending && children == 0) {
         try {
@@ -84,7 +83,9 @@ export class DepGraph {
   QuickRemoveList<Node> nodeList;
   std::mutex mutex;
 
-  void removeNode(Node& node) { nodeList.erase(node); }
+  void removeNode(Node& node) {
+    if (!nodeList.empty()) nodeList.erase(node);
+  }
 
  public:
   Node& addNode(std::function<Func>&& callable,
