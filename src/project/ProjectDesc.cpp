@@ -1,4 +1,6 @@
-export struct PackagePath : public fs::path {};
+export struct PackagePath : public Path {
+  using Hash = std::hash<Path>;
+};
 
 export defException(PackageNotBuilt, (std::string name),
                     name + " is not built");
@@ -6,13 +8,13 @@ export defException(PackageNotBuilt, (std::string name),
 export struct ProjectDesc {
  public:
   std::string name;
-  std::vector<PackagePath> packages;
+  std::unordered_set<PackagePath, PackagePath::Hash> packages;
 
   struct Dev {
-    fs::path buildFile = "build.cpp";
+    Path buildFile = "build.cpp";
     std::string compiler = "clang++";
     bool debug = false;
-    std::vector<PackagePath> packages;
+    std::unordered_set<PackagePath, PackagePath::Hash> packages;
 
    private:
     BOOST_DESCRIBE_CLASS(Dev, (), (buildFile, compiler, debug, packages), (),
@@ -20,9 +22,10 @@ export struct ProjectDesc {
   };
   std::optional<Merge<Dev>> dev;
 
-  std::variant<std::shared_ptr<Merge<Usage>>, fs::path> usage;
+  std::variant<std::shared_ptr<Merge<Usage>>, Path> usage;
 
-  static ProjectDesc create(const fs::path& path, const fs::path packagesPath) {
+  static ProjectDesc create(const Path& path,
+                            const Path& packagesPath) {
     const auto projectPath =
         fs::canonical(fs::is_directory(path) ? path / "project.json" : path);
     return json::value_to<Merge<ProjectDesc>>(
@@ -31,7 +34,7 @@ export struct ProjectDesc {
   }
 
   std::shared_ptr<Export> getExport() {
-    if (std::holds_alternative<fs::path>(usage)) throw PackageNotBuilt(name);
+    if (std::holds_alternative<Path>(usage)) throw PackageNotBuilt(name);
     return std::get<0>(usage);
   }
 
@@ -42,7 +45,7 @@ export struct ProjectDesc {
 struct PackageLoc {
  public:
   std::string name;
-  fs::path path;
+  Path path;
 
  private:
   BOOST_DESCRIBE_CLASS(PackageLoc, (), (name, path), (), ())
@@ -52,7 +55,7 @@ export PackagePath tag_invoke(const json::value_to_tag<PackagePath>&,
                               const json::value& jv,
                               const PackageJsonContext& ctx) {
   auto loc = json::value_to<std::variant<std::string, PackageLoc>>(jv);
-  return PackagePath(std::visit(
+  return PackagePath(fs::weakly_canonical(std::visit(
       [&](auto&& loc) {
         using T = std::decay_t<decltype(loc)>;
         if constexpr (std::is_same_v<T, std::string>)
@@ -60,5 +63,5 @@ export PackagePath tag_invoke(const json::value_to_tag<PackagePath>&,
         else
           return loc.path;
       },
-      loc));
+      loc)));
 }

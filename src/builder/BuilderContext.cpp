@@ -19,10 +19,10 @@ export struct BuilderContext {
  public:
   const Context &ctx;
   const std::shared_ptr<const Compiler> &compiler;
-  const CompilerOptions &compilerOptions;
+  const CompilerOptions compilerOptions;
 
-  BuilderContext(const Context &ctx,
-                 const std::shared_ptr<const Compiler> &compiler,
+  BuilderContext(CLRef<Context> ctx,
+                 CLRef<std::shared_ptr<const Compiler>> compiler,
                  const CompilerOptions &compilerOptions)
       : ctx(ctx), compiler(compiler), compilerOptions(compilerOptions) {}
 
@@ -68,44 +68,6 @@ export struct BuilderContext {
     return 0;
   }
 
-  template <std::ranges::range Deps = std::ranges::empty_view<Ref<Node>>>
-  Node &compilePCM(const Path &input, const Path &output,
-                   const Deps &deps = std::views::empty<Ref<Node>>) {
-    vfs.emplace(output);
-    return collect(ctx.depGraph.addNode(
-        [=, &ctx = this->ctx, compiler = this->compiler,
-         compilerOptions = this->compilerOptions, id = id++](DepGraph &graph) {
-          UNUSED(compilerOptions);
-          Logger::info(std::format("\033[0;34m[{}] Compiling pcm: {}\033[0m",
-                                   id, output.generic_string()));
-          Logger::flush();
-          return handleResult(
-              compiler->compilePCM(input, output, ctx.pcmPath(),
-                                   compilerOptions.compileOptions),
-              graph);
-        },
-        deps));
-  }
-
-  template <std::ranges::range Deps = std::ranges::empty_view<Ref<Node>>>
-  Node &compile(const Path &input, const Path &output,
-                const Deps &deps = std::views::empty<Ref<Node>>) {
-    vfs.emplace(output);
-    return collect(ctx.depGraph.addNode(
-        [=, &ctx = this->ctx, compiler = this->compiler,
-         compilerOptions = this->compilerOptions, id = id++](DepGraph &graph) {
-          UNUSED(compilerOptions);
-          Logger::info(std::format("\033[0;34m[{}] Compiling obj: {}\033[0m",
-                                   id, output.generic_string()));
-          Logger::flush();
-          return handleResult(
-              compiler->compile(input, output, ctx.debug, ctx.pcmPath(),
-                                compilerOptions.compileOptions),
-              graph);
-        },
-        deps));
-  }
-
 #define GENERATE_COMPILE_METHOD(NAME, INPUT, LOGNAME, FUNC)                  \
   template <std::ranges::range Deps = std::ranges::empty_view<Ref<Node>>>    \
   Node &NAME(INPUT, const Path &output,                                      \
@@ -115,6 +77,7 @@ export struct BuilderContext {
         [=, &ctx = this->ctx, compiler = this->compiler,                     \
          compilerOptions = this->compilerOptions,                            \
          id = id++](DepGraph &graph) {                                       \
+          UNUSED(ctx);                                                       \
           UNUSED(compilerOptions);                                           \
           Logger::info(std::format("\033[0;34m[{}] " #LOGNAME ": {}\033[0m", \
                                    id, output.generic_string()));            \
@@ -124,13 +87,20 @@ export struct BuilderContext {
         deps));                                                              \
   }
 
-  // GENERATE_COMPILE_METHOD(compilePCM, const Path &input, Compiling pcm,
-  //                         compiler->compilePCM(input, output, ctx.pcmPath(),
-  //                                              compilerOptions.compileOptions));
-  // GENERATE_COMPILE_METHOD(compile, const Path &input, Compiling obj,
-  //                         compiler->compile(input, output, ctx.debug,
-  //                                           ctx.pcmPath(),
-  //                                           compilerOptions.compileOptions));
+  GENERATE_COMPILE_METHOD(
+      compilePCM,
+      const Path &input
+          COMMA const std::unordered_map<std::string COMMA Path> &moduleMap,
+      Compiling pcm,
+      compiler->compilePCM(input, output, moduleMap,
+                           compilerOptions.compileOptions));
+  GENERATE_COMPILE_METHOD(
+      compile,
+      const Path &input
+          COMMA const std::unordered_map<std::string COMMA Path> &moduleMap,
+      Compiling obj,
+      compiler->compile(input, output, ctx.debug, moduleMap,
+                        compilerOptions.compileOptions));
   GENERATE_COMPILE_METHOD(link, const std::vector<Path> &objList, Linking,
                           compiler->link(objList, output, ctx.debug,
                                          compilerOptions.linkOptions));
@@ -144,10 +114,9 @@ export struct BuilderContextChild : public BuilderContext {
   BuilderContext &parent;
 
  public:
-  BuilderContextChild(BuilderContext &parent, const Context &ctx,
-                      const std::shared_ptr<const Compiler> &compiler,
+  BuilderContextChild(LRef<BuilderContext> parent, CLRef<Context> ctx,
                       const CompilerOptions &compilerOptions)
-      : BuilderContext(ctx, compiler, compilerOptions), parent(parent) {
+      : BuilderContext(ctx, parent.compiler, compilerOptions), parent(parent) {
     id = parent.id;
   }
 

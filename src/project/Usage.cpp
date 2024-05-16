@@ -1,22 +1,35 @@
 struct PackageJsonContext {
-  const fs::path& projectPath;
-  const fs::path& packagesPath;
+  const Path& projectPath;
+  const Path& packagesPath;
 };
 
 export struct FmtString : public std::string {};
-export struct FmtPath : public fs::path {};
+export struct FmtPath : public Path {};
 
 struct Usage : public Export {
  protected:
-  struct BuiltTarget : public Target {
-    BuiltTarget(const fs::path& output) : Target(output) {}
+  struct BuiltTarget : public NamedTarget {
+   private:
+    const std::string name;
+    const Path output;
 
-    fs::path getOutput(BuilderContext& ctx) const override { return _output; };
+   public:
+    BuiltTarget(const std::string& name, const Path& output)
+        : name(name), output(output) {}
+
+    const std::string& getName() const override { return name; }
+
+    Path getOutput(BuilderContext& ctx) const override { return output; };
 
    protected:
-    std::optional<Ref<DepGraph::Node>> onBuild(
+    std::optional<Ref<DepGraph::Node>> build(
         BuilderContext& ctx) const override {
       return std::nullopt;
+    }
+
+    std::unordered_map<std::string, Path> getModuleMap(
+        BuilderContext& ctx) const override {
+      return std::unordered_map<std::string, Path>();
     }
   };
 
@@ -38,7 +51,7 @@ struct Usage : public Export {
 
   mutable std::unordered_map<std::string, BuiltTarget> cache;
 
-  std::optional<Ref<const Target>> findPCM(
+  std::optional<Ref<const NamedTarget>> findPCM(
       const std::string& moduleName) const override {
     if (!pcmPath.has_value()) return std::nullopt;
     const auto it = cache.find(moduleName);
@@ -48,7 +61,10 @@ struct Usage : public Export {
       auto modulePath =
           pcmPath.value() / (replace(moduleName, ':', '-') + ".pcm");
       if (!fs::exists(modulePath)) return std::nullopt;
-      return cache.emplace(moduleName, modulePath).first->second;
+      return cache
+          .emplace(std::piecewise_construct, std::forward_as_tuple(moduleName),
+                   std::forward_as_tuple(moduleName, modulePath))
+          .first->second;
     }
   };
 

@@ -45,3 +45,4 @@ target_link_libraries(make.cpp PRIVATE ${Boost_LIBRARIES})
 # Install
 install(TARGETS makeDotCpp CXX_MODULES_BMI DESTINATION lib)
 install(TARGETS make.cpp)
+install(DIRECTORY template DESTINATION .)

@@ -15,7 +15,6 @@ import makeDotCpp.utils;
 #include "macro.hpp"
 
 namespace makeDotCpp {
-using Path = fs::path;
 using Node = DepGraph::Node;
 using NodeList = std::deque<Ref<Node>>;
 

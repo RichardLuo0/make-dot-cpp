@@ -5,15 +5,21 @@ import makeDotCpp.compiler;
 import makeDotCpp.fileProvider;
 import makeDotCpp.builder;
 
-using namespace makeDotCpp;
+import std_export;
+import boost_export;
+import glob_export;
 
+using namespace makeDotCpp;
 namespace fs = std::filesystem;
 
 int main(int argc, const char **argv) {
+  std::deque<std::shared_ptr<Export>> packages;
+  packages.emplace_back(create_std());
+  packages.emplace_back(create_boost());
+  packages.emplace_back(create_glob());
+
   Project::OptionParser op;
   op.parse(argc, argv);
-  const auto packagesPath = op.getPackagesPath();
-  const auto projectDesc = ProjectDesc::create("project.json", packagesPath);
 
   Clang clang;
   clang.addOption("-march=native -std=c++20 -O3 -Wall")
@@ -27,9 +33,7 @@ int main(int argc, const char **argv) {
   ExeBuilder builder;
   builder.setName("make.cpp").setCompiler(clang).addSrc("src/main.cpp");
 
-  for (auto &packagePath : projectDesc.packages) {
-    const auto package =
-        ProjectDesc::create(packagePath, packagesPath).getExport();
+  for (auto &package : packages) {
     libBuilder.addDepend(package);
     builder.addDepend(package);
   }

@@ -84,11 +84,9 @@ export class Builder {
  protected:
   chainVarSet(std::shared_ptr<const Export>, exSet, addDepend, ex);
 
- protected:
-  mutable bool isPrepared = false;
-  mutable CompilerOptions compilerOptions;
-
  private:
+  CompilerOptions compilerOptions;
+
   chainMethod(addSrc, FileProvider, p) { srcSet.merge(p.list()); }
   chainMethod(define, std::string, d) {
     compilerOptions.compileOptions += " -D " + d;
@@ -138,21 +136,21 @@ export class Builder {
       if (fs::exists(depJsonPath) &&
           fs::last_write_time(depJsonPath) > fs::last_write_time(input)) {
         std::ifstream is(depJsonPath);
-        const auto depJson =
-            json::parse(std::string(std::istreambuf_iterator<char>(is), {}));
+        const auto depJson = parseJson(depJsonPath);
         unitList.emplace_back(json::value_to<Unit>(depJson));
       } else {
         auto &unit = unitList.emplace_back();
         unit.input = input;
         unit.includeDeps = this->compiler->getIncludeDeps(input);
-        auto info = this->compiler->getModuleInfo(input);
+        auto info = this->compiler->getModuleInfo(
+            input, getCompilerOptions().compileOptions);
         unit.moduleName = info.name;
         unit.exported = info.exported;
         unit.moduleDeps = info.deps;
         fs::create_directories(depJsonPath.parent_path());
         std::ofstream os(depJsonPath);
+        os.exceptions(std::ifstream::failbit);
         os << json::value_from(unit);
-        if (os.fail()) throw FileNotFound(depJsonPath);
       }
     }
     return unitList;
@@ -167,14 +165,15 @@ export class Builder {
     return libList;
   }
 
-  void prepareCompilerOptions() const {
-    if (!isPrepared) {
-      isPrepared = true;
-      for (auto &ex : exSet) {
-        compilerOptions.compileOptions += ' ' + ex->getCompileOption();
-        compilerOptions.linkOptions += ' ' + ex->getLinkOption();
-      }
+  CompilerOptions getCompilerOptions() const {
+    CompilerOptions co;
+    for (auto &ex : exSet) {
+      co.compileOptions += ' ' + ex->getCompileOption();
+      co.linkOptions += ' ' + ex->getLinkOption();
     }
+    co.compileOptions += ' ' + compilerOptions.compileOptions;
+    co.linkOptions += ' ' + compilerOptions.linkOptions;
+    return co;
   }
 
   virtual TargetList onBuild() const = 0;
@@ -197,10 +196,9 @@ export class Builder {
   }
 
   virtual BuildResult build(const Context &ctx) const {
-    prepareCompilerOptions();
     const auto targetList = onBuild();
     const auto &target = targetList.getTarget();
-    BuilderContext builderCtx{ctx, compiler, compilerOptions};
+    BuilderContext builderCtx{ctx, compiler, getCompilerOptions()};
     target.build(builderCtx);
     ctx.run();
     return {target.getOutput(builderCtx), builderCtx.takeFutureList()};

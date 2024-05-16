@@ -13,9 +13,9 @@ export class Project {
           .operator()("build", "build the project")
           .operator()("release", "build and release the project")
           .operator()("clean", "clean the output directory")
-          .operator()("output,o", po::value<fs::path>(),
+          .operator()("output,o", po::value<Path>(),
                       "output directory. Default to `build`")
-          .operator()("packages,p", po::value<fs::path>(), "packages directory")
+          .operator()("packages,p", po::value<Path>(), "packages directory")
           .operator()("debug,g", "enable debug");
     }
 
@@ -24,10 +24,10 @@ export class Project {
       po::notify(vm);
     }
 
-    fs::path getPackagesPath() {
+    Path getPackagesPath() {
       const auto vv = vm["packages"];
       return vv.empty() ? fs::weakly_canonical(std::getenv("CXX_PACKAGES"))
-                        : vv.as<fs::path>();
+                        : vv.as<Path>();
     }
 
     void printDesc() const { std::cout << *this << std::endl; }
@@ -49,7 +49,7 @@ export class Project {
   chainVar(ReleaseFunc, releaseFunc, nullptr, setRelease);
 
   chainMethod(setName, std::string, name) { ctx.name = name; }
-  chainMethod(to, fs::path, path) { ctx.output = fs::weakly_canonical(path); }
+  chainMethod(to, Path, path) { ctx.output = fs::weakly_canonical(path); }
   chainMethod(setDebug, bool, debug) { ctx.debug = debug; }
   chainMethod(setThreadPoolSize, std::size_t, size) {
     ctx.threadPool.setSize(size);
@@ -86,7 +86,7 @@ export class Project {
     auto value = vv.as<TYPE>();       \
     FUNC;                             \
   }
-    APPLY_IF_HAS("output", fs::path, to(value));
+    APPLY_IF_HAS("output", Path, to(value));
 #undef APPLY_IF_HAS
 
     if (op.contains("debug")) {

@@ -8,16 +8,16 @@ import makeDotCpp.thread;
 namespace makeDotCpp {
 export struct Context {
   std::string name = "Project";
-  fs::path output = fs::weakly_canonical("build");
+  Path output = fs::weakly_canonical("build");
   bool debug = false;
-  fs::path relativePCMPath = "pcm";
-  fs::path relativeObjPath = "obj";
+  Path relativePCMPath = "pcm";
+  Path relativeObjPath = "obj";
 
   static inline ThreadPool threadPool{8};
   static inline DepGraph depGraph;
 
-  fs::path pcmPath() const { return output / relativePCMPath; }
-  fs::path objPath() const { return output / relativeObjPath; }
+  Path pcmPath() const { return output / relativePCMPath; }
+  Path objPath() const { return output / relativeObjPath; }
 
   void run() const { depGraph.runOn(threadPool); }
 };

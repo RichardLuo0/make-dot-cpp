@@ -9,6 +9,11 @@ import std;
 #include "alias.hpp"
 
 namespace makeDotCpp {
+export template <typename T>
+using LRef = std::add_lvalue_reference_t<T>;
+export template <typename T>
+using CLRef = std::add_lvalue_reference_t<std::add_const_t<T>>;
+
 export template <std::ranges::range C, std::size_t N>
 class concatView : public std::ranges::view_interface<concatView<C, N>> {
  private:
@@ -36,7 +41,7 @@ inline C replace(const C& c, auto&& item, auto&& newItem) {
   return cCopy;
 }
 
-export json::value parseJson(const fs::path& path) {
+export json::value parseJson(const Path& path) {
   std::ifstream is(path);
   std::string input(std::istreambuf_iterator<char>(is), {});
   return json::parse(input);
@@ -74,13 +79,13 @@ Merge<T> tag_invoke(const json::value_to_tag<Merge<T>>&, const json::value& jv,
 namespace boost {
 namespace json {
 export void tag_invoke(const json::value_from_tag&, json::value& jv,
-                       const fs::path& path) {
+                       const Path& path) {
   jv = path.generic_string();
 }
 
-export fs::path tag_invoke(const json::value_to_tag<fs::path>&,
+export Path tag_invoke(const json::value_to_tag<Path>&,
                            const json::value& jv) {
-  return fs::path(std::string(jv.as_string()));
+  return Path(std::string(jv.as_string()));
 }
 }  // namespace json
 }  // namespace boost

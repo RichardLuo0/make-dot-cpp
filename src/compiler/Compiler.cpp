@@ -1,4 +1,4 @@
-using Path = fs::path;
+using Path = Path;
 
 struct ModuleInfo {
   bool exported = false;
@@ -17,19 +17,18 @@ export class Compiler {
   virtual Process::Result NAME ARGS const = 0; \
   virtual std::string NAME##Command ARGS const = 0;
 
-  GENERATE_COMPILE_METHOD(compile,
-                          (const Path &input, const Path &output,
-                           bool isDebug = false,
-                           const std::optional<Path> &modulePath = std::nullopt,
-                           const std::string &extraOptions = ""));
+  GENERATE_COMPILE_METHOD(
+      compilePCM, (const Path &input, const Path &output,
+                   const std::unordered_map<std::string, Path> &moduleMap = {},
+                   const std::string &extraOptions = ""));
+  GENERATE_COMPILE_METHOD(
+      compile, (const Path &input, const Path &output, bool isDebug = false,
+                const std::unordered_map<std::string, Path> &moduleMap = {},
+                const std::string &extraOptions = ""));
 
   GENERATE_COMPILE_METHOD(link, (const std::vector<Path> &input,
                                  const Path &output, bool isDebug = false,
                                  const std::string &extraOptions = ""));
-
-  GENERATE_COMPILE_METHOD(compilePCM, (const Path &input, const Path &output,
-                                       const Path &modulePath,
-                                       const std::string &extraOptions = ""));
 
   GENERATE_COMPILE_METHOD(archive, (const std::vector<Path> &input,
                                     const Path &output, bool isDebug = false));
@@ -37,7 +36,8 @@ export class Compiler {
 
   virtual std::deque<Path> getIncludeDeps(const Path &input) const = 0;
 
-  virtual ModuleInfo getModuleInfo(const Path &input) const = 0;
+  virtual ModuleInfo getModuleInfo(
+      const Path &input, const std::string &extraOptions = "") const = 0;
 
  protected:
   void ensureParentExists(const Path &path) const {

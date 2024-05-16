@@ -1,6 +1,6 @@
 export class ObjBuilder : public Builder {
  protected:
-  using ModuleMap = std::unordered_map<std::string, Ref<const Target>>;
+  using ModuleMap = std::unordered_map<std::string, Ref<const NamedTarget>>;
 
   auto buildObjTargetList(ModuleMap &moduleMap) const {
     const auto unitList = buildUnitList();
@@ -13,7 +13,7 @@ export class ObjBuilder : public Builder {
       const auto objPath = absoluteProximate(unit.input) += ".obj";
       if (unit.exported) {
         obj = std::make_unique<ObjTarget>(
-            unit.input, unit.includeDeps, objPath,
+            unit.input, unit.includeDeps, objPath, unit.moduleName,
             replace(unit.moduleName, ':', '-') + ".pcm");
         moduleMap.emplace(unit.moduleName, obj->getPCM());
       } else

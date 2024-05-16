@@ -12,59 +12,55 @@ using namespace makeDotCpp;
 
 defException(ProjectNotBuildable, (std::string name),
              name + " is not buildable");
-defException(CyclicDependency, (fs::path path),
+defException(CyclicDependency, (Path path),
              "detected cyclic dependency: " + path.generic_string());
 
-fs::path output = fs::weakly_canonical(".build");
+Path output = fs::weakly_canonical(".build");
 std::shared_ptr<Compiler> compiler = std::make_shared<Clang>();
 
-void populateDepends(std::unordered_set<fs::path>& currentDeps,
+std::unordered_map<Path, ProjectDesc> descCache;
+
+void populateDepends(std::unordered_set<Path>& currentDeps,
                      const ProjectDesc& desc, Builder& builder,
-                     const fs::path& packagesPath);
+                     const Path& packagesPath);
 
-std::unordered_map<fs::path, ProjectDesc> cacheDesc;
-
-std::optional<std::shared_ptr<Export>> buildPackage(
-    std::unordered_set<fs::path>& currentDeps, fs::path path,
-    const fs::path& packagesPath) {
+ProjectDesc& findBuiltPackage(Path path, const Path& packagesPath) {
   path = fs::weakly_canonical(path);
-  const auto it = cacheDesc.find(path);
-  const auto& projectDesc =
-      it != cacheDesc.end()
-          ? it->second
-          : cacheDesc.emplace(path, ProjectDesc::create(path, packagesPath))
-                .first->second;
+  const auto it = descCache.find(path);
+  return it != descCache.end()
+             ? it->second
+             : descCache.emplace(path, ProjectDesc::create(path, packagesPath))
+                   .first->second;
+}
 
-  if (!std::holds_alternative<fs::path>(projectDesc.usage)) return std::nullopt;
-  const auto buildFile = std::get<fs::path>(projectDesc.usage);
-
+std::shared_ptr<Export> buildPackage(std::unordered_set<Path>& currentDeps,
+                                     Path path,
+                                     const Path& packagesPath) {
+  auto& projectDesc = findBuiltPackage(path, packagesPath);
   LibBuilder builder;
   builder.setName(projectDesc.name)
       .setCompiler(compiler)
       .define("NO_MAIN")
       .define("MODULE_NAME=" + projectDesc.name)
       .define("PROJECT_PATH=" + path.generic_string())
-      .define("PACKAGES_PATH=" + packagesPath.generic_string())
-      .addSrc(buildFile);
+      .define("PACKAGES_PATH=" + packagesPath.generic_string());
+  if (std::holds_alternative<Path>(projectDesc.usage)) {
+    builder.addSrc(std::get<Path>(projectDesc.usage));
+  } else {
+    builder.addSrc(packagesPath / "makeDotCpp/template/package.cppm");
+    auto& dev = projectDesc.dev.emplace();
+    dev.packages.emplace(fs::weakly_canonical(packagesPath / "std"));
+    dev.packages.emplace(fs::weakly_canonical(packagesPath / "makeDotCpp"));
+  }
   populateDepends(currentDeps, projectDesc, builder, packagesPath);
   return builder.createExport(
       fs::is_directory(path) ? path : path.parent_path(),
-      output / projectDesc.name);
+      output / "packages" / projectDesc.name);
 }
 
-ProjectDesc findBuiltPackage(fs::path path, const fs::path& packagesPath) {
-  path = fs::weakly_canonical(path);
-  const auto it = cacheDesc.find(path);
-  if (it != cacheDesc.end()) return it->second;
-  const auto& projectDesc =
-      cacheDesc.emplace(path, ProjectDesc::create(path, packagesPath))
-          .first->second;
-  return projectDesc;
-}
-
-void populateDepends(std::unordered_set<fs::path>& currentDeps,
+void populateDepends(std::unordered_set<Path>& currentDeps,
                      const ProjectDesc& desc, Builder& builder,
-                     const fs::path& packagesPath) {
+                     const Path& packagesPath) {
   if (desc.dev.has_value())
     for (auto& packagePath : desc.dev.value().packages) {
       builder.addDepend(
@@ -74,8 +70,7 @@ void populateDepends(std::unordered_set<fs::path>& currentDeps,
   for (auto& packagePath : desc.packages) {
     if (currentDeps.contains(packagePath)) throw CyclicDependency(packagePath);
     currentDeps.emplace(packagePath);
-    const auto ex = buildPackage(currentDeps, packagePath, packagesPath);
-    if (ex.has_value()) builder.addDepend(ex.value());
+    builder.addDepend(buildPackage(currentDeps, packagePath, packagesPath));
     currentDeps.erase(packagePath);
   }
 }
@@ -99,7 +94,7 @@ int main(int argc, const char** argv) {
 
   ExeBuilder builder;
   builder.setName("build").addSrc(dev.buildFile);
-  std::unordered_set<fs::path> currentDeps{projectPath};
+  std::unordered_set<Path> currentDeps{projectPath};
   populateDepends(currentDeps, projectDesc, builder, packagesPath);
 
   Context ctx{"build", output, dev.debug};
@@ -117,7 +112,7 @@ int main(int argc, const char** argv) {
       args += std::string(" ") + argv[i];
     }
     Process::runNoRedirect(result.output.generic_string() + args);
-  } catch (CompileError& e) {
+  } catch (std::exception& e) {
     std::cerr << "\033[0;31mError: " << e.what() << "\033[0m" << std::endl;
   }
 }

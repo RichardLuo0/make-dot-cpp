@@ -4,12 +4,12 @@
 #define POSTFIX ""
 #endif
 
-export struct ExeTarget : public Target {
+export struct ExeTarget : public CachedTarget<> {
  private:
   std::deque<Ref<const Target>> deps;
 
  public:
-  ExeTarget(const Path &output) : Target(output) {}
+  ExeTarget(const Path &output) : CachedTarget(output) {}
 
   Path getOutput(BuilderContext &ctx) const override {
     return ctx.outputPath() / _output;
