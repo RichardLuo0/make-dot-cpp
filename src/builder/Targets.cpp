@@ -8,12 +8,6 @@ export struct Target {
   virtual std::optional<Ref<Node>> build(BuilderContext &ctx) const = 0;
 };
 
-export struct NamedTarget : public Target {
-  virtual const std::string &getName() const = 0;
-  virtual std::unordered_map<std::string, Path> getModuleMap(
-      BuilderContext &ctx) const = 0;
-};
-
 export template <class T = Target>
 struct CachedTarget : public T {
  protected:
@@ -43,20 +37,39 @@ struct CachedTarget : public T {
   virtual std::optional<Ref<Node>> onBuild(BuilderContext &ctx) const = 0;
 };
 
-struct EmptyTarget : public Target {
+export struct : public Target {
   Path getOutput(BuilderContext &ctx) const override { return Path(); }
   std::optional<Ref<Node>> build(BuilderContext &ctx) const override {
     return std::nullopt;
   }
+} emptyTarget;
+
+export struct CustomTarget : public Target {
+  Path getOutput(BuilderContext &ctx) const override {
+    return getOutput(static_cast<VFSContext &>(ctx));
+  }
+
+  std::optional<Ref<Node>> build(BuilderContext &ctx) const override {
+    return build(static_cast<VFSContext &>(ctx));
+  }
+
+  virtual Path getOutput(VFSContext &ctx) const = 0;
+  virtual std::optional<Ref<Node>> build(VFSContext &ctx) const = 0;
 };
-export EmptyTarget emptyTarget;
 
-export struct DepsTarget {
- protected:
+export struct ModuleTarget : public Target {
+  virtual const std::string &getName() const = 0;
+  virtual std::unordered_map<std::string, Path> getModuleMap(
+      BuilderContext &ctx) const = 0;
+};
+
+export struct UnitDeps {
+ private:
   const std::deque<Path> includeDeps;
-  std::deque<Ref<const NamedTarget>> targetDeps;
+  std::deque<Ref<const ModuleTarget>> targetDeps;
 
-  DepsTarget(const std::deque<Path> &includeDeps) : includeDeps(includeDeps) {}
+ protected:
+  UnitDeps(const std::deque<Path> &includeDeps) : includeDeps(includeDeps) {}
 
   std::optional<NodeList> buildNodeList(BuilderContext &ctx,
                                         const Path &output) const {
@@ -75,6 +88,7 @@ export struct DepsTarget {
                : std::nullopt;
   }
 
+  // TODO Cycle detection
   std::unordered_map<std::string, Path> getModuleMap(
       BuilderContext &ctx) const {
     std::unordered_map<std::string, Path> map;
@@ -87,10 +101,10 @@ export struct DepsTarget {
   }
 
  public:
-  void dependOn(const NamedTarget &target) { targetDeps.emplace_back(target); }
+  void dependOn(const ModuleTarget &target) { targetDeps.emplace_back(target); }
 };
 
-export struct PCMTarget : public DepsTarget, public CachedTarget<NamedTarget> {
+export struct PCMTarget : public UnitDeps, public CachedTarget<ModuleTarget> {
  private:
   const std::string name;
   const Path input;
@@ -98,10 +112,7 @@ export struct PCMTarget : public DepsTarget, public CachedTarget<NamedTarget> {
  public:
   PCMTarget(const std::string &name, const Path &input, const Path &output,
             const std::deque<Path> &includeDeps)
-      : DepsTarget(includeDeps),
-        CachedTarget(output),
-        name(name),
-        input(input) {}
+      : UnitDeps(includeDeps), CachedTarget(output), name(name), input(input) {}
 
   const std::string &getName() const override { return name; }
 
@@ -111,13 +122,13 @@ export struct PCMTarget : public DepsTarget, public CachedTarget<NamedTarget> {
 
   std::unordered_map<std::string, Path> getModuleMap(
       BuilderContext &ctx) const override {
-    return DepsTarget::getModuleMap(ctx);
+    return UnitDeps::getModuleMap(ctx);
   }
 
  protected:
   std::optional<Ref<Node>> onBuild(BuilderContext &ctx) const override {
     const Path output = getOutput(ctx);
-    auto nodeListOpt = DepsTarget::buildNodeList(ctx, output);
+    auto nodeListOpt = UnitDeps::buildNodeList(ctx, output);
     if (nodeListOpt.has_value())
       return ctx.compilePCM(input, getModuleMap(ctx), output,
                             nodeListOpt.value());
@@ -130,13 +141,13 @@ export struct ObjTarget : public CachedTarget<> {
  protected:
   using IsModule = PCMTarget;
 
-  struct NotModule : public DepsTarget, public Target {
+  struct NotModule : public UnitDeps, public Target {
     const ObjTarget &parent;
     const Path input;
 
     NotModule(const Path &input, const ObjTarget &parent,
               const std::deque<Path> &includeDeps)
-        : DepsTarget(includeDeps), parent(parent), input(input) {}
+        : UnitDeps(includeDeps), parent(parent), input(input) {}
 
     Path getOutput(BuilderContext &ctx) const override {
       return parent.getOutput(ctx);
@@ -144,7 +155,7 @@ export struct ObjTarget : public CachedTarget<> {
 
     std::optional<Ref<Node>> build(BuilderContext &ctx) const override {
       const Path output = getOutput(ctx);
-      auto nodeListOpt = DepsTarget::buildNodeList(ctx, output);
+      auto nodeListOpt = UnitDeps::buildNodeList(ctx, output);
       if (nodeListOpt.has_value())
         return ctx.compile(input, getModuleMap(ctx), output,
                            nodeListOpt.value());
@@ -172,7 +183,7 @@ export struct ObjTarget : public CachedTarget<> {
 
   const PCMTarget &getPCM() { return std::get<IsModule>(internal); }
 
-  void dependOn(const NamedTarget &target) {
+  void dependOn(const ModuleTarget &target) {
     std::visit([&](auto &&internal) { internal.dependOn(target); }, internal);
   }
 

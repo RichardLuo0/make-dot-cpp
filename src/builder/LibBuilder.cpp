@@ -39,14 +39,14 @@ export class LibBuilder : public ObjBuilder {
     ModuleMap moduleMap;
     const TargetList targetList;
 
-    mutable std::unordered_set<NamedTargetProxy, NamedTargetProxy::Hash,
-                               NamedTargetProxy::EqualTo>
-        pcmCache;
     const std::optional<Context> ctx;
-    const CompilerOptions compilerOptions;
+    const std::optional<CompilerOptions> compilerOptions;
     const TargetProxy<> target;
+    mutable std::unordered_set<ModuleTargetProxy, ModuleTargetProxy::Hash,
+                               ModuleTargetProxy::EqualTo>
+        pcmCache;
 
-    auto getFromCache(const NamedTarget &target) const {
+    auto getFromCache(const ModuleTarget &target) const {
       const auto it = pcmCache.find(target);
       return std::ref(
           it != pcmCache.end()
@@ -56,14 +56,13 @@ export class LibBuilder : public ObjBuilder {
 
    public:
     LibExport(const LibBuilder &builder,
-              const std::optional<Context> &ctx = std::nullopt,
-              const CompilerOptions compilerOptions = {})
+              const std::optional<Context> &ctx = std::nullopt)
         : targetList(builder.onBuild(moduleMap)),
           ctx(ctx),
-          compilerOptions(compilerOptions),
+          compilerOptions(builder.getCompilerOptions()),
           target(targetList.getTarget(), this->ctx, this->compilerOptions) {}
 
-    virtual std::optional<Ref<const NamedTarget>> findPCM(
+    virtual std::optional<Ref<const ModuleTarget>> findPCM(
         const std::string &moduleName) const override {
       const auto it = moduleMap.find(moduleName);
       return it == moduleMap.end()
@@ -80,9 +79,7 @@ export class LibBuilder : public ObjBuilder {
   mutable std::shared_ptr<LibExport> ex;
 
   std::shared_ptr<Export> getExport() const {
-    if (ex == nullptr)
-      ex = std::make_shared<LibExport>(*this, std::nullopt,
-                                       getCompilerOptions());
+    if (ex == nullptr) ex = std::make_shared<LibExport>(*this);
     return ex;
   }
 
@@ -90,8 +87,7 @@ export class LibBuilder : public ObjBuilder {
                                        const Path &outputPath) const {
     auto currentPath = fs::current_path();
     fs::current_path(projectPath);
-    auto ex = std::make_shared<LibExport>(*this, Context{name, outputPath},
-                                          getCompilerOptions());
+    auto ex = std::make_shared<LibExport>(*this, Context{name, outputPath});
     fs::current_path(currentPath);
     return ex;
   }

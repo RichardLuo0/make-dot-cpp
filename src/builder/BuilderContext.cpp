@@ -3,30 +3,14 @@ export struct CompilerOptions {
   std::string linkOptions;
 };
 
-export struct BuilderContext {
-  friend struct BuilderContextChild;
-
+export struct VFSContext {
  protected:
-  int id = 1;
-  FutureList futureList;
   std::unordered_set<Path> vfs;
-
-  Node &collect(Node &node) {
-    futureList.emplace_back(node.takeFuture());
-    return node;
-  }
 
  public:
   const Context &ctx;
-  const std::shared_ptr<const Compiler> &compiler;
-  const CompilerOptions compilerOptions;
 
-  BuilderContext(CLRef<Context> ctx,
-                 CLRef<std::shared_ptr<const Compiler>> compiler,
-                 const CompilerOptions &compilerOptions)
-      : ctx(ctx), compiler(compiler), compilerOptions(compilerOptions) {}
-
-  FutureList &&takeFutureList() { return std::move(futureList); }
+  VFSContext(CLRef<Context> ctx) : ctx(ctx) {}
 
   bool exists(Path path) const {
     return vfs.contains(path) ? true : fs::exists(path);
@@ -51,11 +35,37 @@ export struct BuilderContext {
     return false;
   }
 
+  void addFile(const Path &path) { vfs.emplace(path); }
+
   Path outputPath() const { return ctx.output; }
 
   Path pcmPath() const { return ctx.pcmPath(); }
 
   Path objPath() const { return ctx.objPath(); }
+};
+
+export struct BuilderContext : public VFSContext {
+  friend struct BuilderContextChild;
+
+ protected:
+  int id = 1;
+  FutureList futureList;
+
+  Node &collect(Node &node) {
+    futureList.emplace_back(node.takeFuture());
+    return node;
+  }
+
+ public:
+  const std::shared_ptr<const Compiler> &compiler;
+  const CompilerOptions compilerOptions;
+
+  BuilderContext(CLRef<Context> ctx,
+                 CLRef<std::shared_ptr<const Compiler>> compiler,
+                 const CompilerOptions &compilerOptions)
+      : VFSContext(ctx), compiler(compiler), compilerOptions(compilerOptions) {}
+
+  FutureList &&takeFutureList() { return std::move(futureList); }
 
   static int handleResult(const Process::Result &&result, DepGraph &graph) {
     Logger::info(result.command);
@@ -72,7 +82,7 @@ export struct BuilderContext {
   template <std::ranges::range Deps = std::ranges::empty_view<Ref<Node>>>    \
   Node &NAME(INPUT, const Path &output,                                      \
              const Deps &deps = std::views::empty<Ref<Node>>) {              \
-    vfs.emplace(output);                                                     \
+    addFile(output);                                                         \
     return collect(ctx.depGraph.addNode(                                     \
         [=, &ctx = this->ctx, compiler = this->compiler,                     \
          compilerOptions = this->compilerOptions,                            \
@@ -117,6 +127,7 @@ export struct BuilderContextChild : public BuilderContext {
   BuilderContextChild(LRef<BuilderContext> parent, CLRef<Context> ctx,
                       const CompilerOptions &compilerOptions)
       : BuilderContext(ctx, parent.compiler, compilerOptions), parent(parent) {
+    vfs.merge(parent.vfs);
     id = parent.id;
   }
 

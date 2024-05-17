@@ -34,7 +34,8 @@ export class Compiler {
                                     const Path &output, bool isDebug = false));
 #undef GENERATE_COMPILE_METHOD
 
-  virtual std::deque<Path> getIncludeDeps(const Path &input) const = 0;
+  virtual std::deque<Path> getIncludeDeps(
+      const Path &input, const std::string &extraOptions = "") const = 0;
 
   virtual ModuleInfo getModuleInfo(
       const Path &input, const std::string &extraOptions = "") const = 0;

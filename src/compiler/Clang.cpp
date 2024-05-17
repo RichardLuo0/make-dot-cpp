@@ -91,10 +91,11 @@ export class Clang : public Compiler {
   }
 #undef GENERATE_COMPILE_METHOD
 
-  std::deque<Path> getIncludeDeps(const Path &input) const override {
+  std::deque<Path> getIncludeDeps(
+      const Path &input, const std::string &extraOptions = "") const override {
     const auto result = Process::run(
-        std::format("{} {} -MM {}", Process::findExecutable("clang++"),
-                    compileOptions, input.generic_string()));
+        std::format("{} {} {} -MM {}", Process::findExecutable("clang++"),
+                    compileOptions, extraOptions, input.generic_string()));
     if (result.status != 0) throw ScanDepsError(input);
     const auto &output = result.output;
     std::deque<Path> deps;

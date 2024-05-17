@@ -24,13 +24,12 @@ export struct ProjectDesc {
 
   std::variant<std::shared_ptr<Merge<Usage>>, Path> usage;
 
-  static ProjectDesc create(const Path& path,
-                            const Path& packagesPath) {
-    const auto projectPath =
+  static ProjectDesc create(const Path& path, const Path& packagesPath) {
+    const auto projectJsonPath =
         fs::canonical(fs::is_directory(path) ? path / "project.json" : path);
     return json::value_to<Merge<ProjectDesc>>(
-        parseJson(projectPath),
-        PackageJsonContext{projectPath.parent_path(), packagesPath});
+        parseJson(projectJsonPath),
+        PackageJsonContext{projectJsonPath.parent_path(), packagesPath});
   }
 
   std::shared_ptr<Export> getExport() {
@@ -44,11 +43,10 @@ export struct ProjectDesc {
 
 struct PackageLoc {
  public:
-  std::string name;
   Path path;
 
  private:
-  BOOST_DESCRIBE_CLASS(PackageLoc, (), (name, path), (), ())
+  BOOST_DESCRIBE_CLASS(PackageLoc, (), (path), (), ())
 };
 
 export PackagePath tag_invoke(const json::value_to_tag<PackagePath>&,

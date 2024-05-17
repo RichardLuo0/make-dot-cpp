@@ -8,7 +8,7 @@ export struct FmtPath : public Path {};
 
 struct Usage : public Export {
  protected:
-  struct BuiltTarget : public NamedTarget {
+  struct BuiltTarget : public ModuleTarget {
    private:
     const std::string name;
     const Path output;
@@ -51,7 +51,7 @@ struct Usage : public Export {
 
   mutable std::unordered_map<std::string, BuiltTarget> cache;
 
-  std::optional<Ref<const NamedTarget>> findPCM(
+  std::optional<Ref<const ModuleTarget>> findPCM(
       const std::string& moduleName) const override {
     if (!pcmPath.has_value()) return std::nullopt;
     const auto it = cache.find(moduleName);

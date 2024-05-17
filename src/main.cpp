@@ -15,12 +15,12 @@ defException(ProjectNotBuildable, (std::string name),
 defException(CyclicDependency, (Path path),
              "detected cyclic dependency: " + path.generic_string());
 
-Path output = fs::weakly_canonical(".build");
+Context ctx{"build", ".build"};
 std::shared_ptr<Compiler> compiler = std::make_shared<Clang>();
 
 std::unordered_map<Path, ProjectDesc> descCache;
 
-void populateDepends(std::unordered_set<Path>& currentDeps,
+void populateDepends(std::unordered_set<Path>& currentDeps, const Path& path,
                      const ProjectDesc& desc, Builder& builder,
                      const Path& packagesPath);
 
@@ -33,16 +33,18 @@ ProjectDesc& findBuiltPackage(Path path, const Path& packagesPath) {
                    .first->second;
 }
 
-std::shared_ptr<Export> buildPackage(std::unordered_set<Path>& currentDeps,
-                                     Path path,
-                                     const Path& packagesPath) {
-  auto& projectDesc = findBuiltPackage(path, packagesPath);
+std::pair<std::shared_ptr<Export>, std::string> buildPackage(
+    std::unordered_set<Path>& currentDeps, const Path& path,
+    const Path& packagesPath) {
+  const auto projectJsonPath =
+      fs::canonical(fs::is_directory(path) ? path / "project.json" : path);
+  auto& projectDesc = findBuiltPackage(projectJsonPath, packagesPath);
   LibBuilder builder;
-  builder.setName(projectDesc.name)
+  builder.setName(projectDesc.name + "_export")
       .setCompiler(compiler)
       .define("NO_MAIN")
       .define("MODULE_NAME=" + projectDesc.name)
-      .define("PROJECT_PATH=" + path.generic_string())
+      .define("PROJECT_JSON_PATH=" + projectJsonPath.generic_string())
       .define("PACKAGES_PATH=" + packagesPath.generic_string());
   if (std::holds_alternative<Path>(projectDesc.usage)) {
     builder.addSrc(std::get<Path>(projectDesc.usage));
@@ -52,13 +54,44 @@ std::shared_ptr<Export> buildPackage(std::unordered_set<Path>& currentDeps,
     dev.packages.emplace(fs::weakly_canonical(packagesPath / "std"));
     dev.packages.emplace(fs::weakly_canonical(packagesPath / "makeDotCpp"));
   }
-  populateDepends(currentDeps, projectDesc, builder, packagesPath);
-  return builder.createExport(
-      fs::is_directory(path) ? path : path.parent_path(),
-      output / "packages" / projectDesc.name);
+  populateDepends(currentDeps, path, projectDesc, builder, packagesPath);
+  return {builder.createExport(projectJsonPath.parent_path(),
+                               ctx.output / "packages" / projectDesc.name),
+          projectDesc.name};
 }
 
-void populateDepends(std::unordered_set<Path>& currentDeps,
+struct ProjectJsonExport : public Export {
+ private:
+  Path projectJson;
+  const std::vector<std::string> packageNames;
+
+ public:
+  ProjectJsonExport(const Path& projectJson,
+                    std::vector<std::string>&& packageNames)
+      : projectJson(projectJson), packageNames(std::move(packageNames)) {}
+
+  std::string getCompileOption() const override {
+    const auto output =
+        ctx.output / "header" / (projectJson.filename() += ".hpp");
+    if (!fs::exists(output) ||
+        fs::last_write_time(output) < fs::last_write_time(projectJson)) {
+      fs::create_directories(output.parent_path());
+      std::ofstream os(output);
+      os.exceptions(std::ifstream::failbit);
+      for (auto& name : packageNames) {
+        os << "import " << name << "_export;\n";
+      }
+      os << "void populatePackages(auto&& packages) {\n";
+      for (auto& name : packageNames) {
+        os << "  packages.emplace_back(create_" << name << "());\n";
+      }
+      os << "}\n";
+    }
+    return "-I " + output.parent_path().generic_string();
+  }
+};
+
+void populateDepends(std::unordered_set<Path>& currentDeps, const Path& path,
                      const ProjectDesc& desc, Builder& builder,
                      const Path& packagesPath) {
   if (desc.dev.has_value())
@@ -67,12 +100,18 @@ void populateDepends(std::unordered_set<Path>& currentDeps,
           findBuiltPackage(packagePath, packagesPath).getExport());
     }
 
+  std::vector<std::string> packageNames;
+  packageNames.reserve(desc.packages.size());
   for (auto& packagePath : desc.packages) {
     if (currentDeps.contains(packagePath)) throw CyclicDependency(packagePath);
     currentDeps.emplace(packagePath);
-    builder.addDepend(buildPackage(currentDeps, packagePath, packagesPath));
+    auto pair = buildPackage(currentDeps, packagePath, packagesPath);
+    builder.addDepend(pair.first);
+    packageNames.emplace_back(pair.second);
     currentDeps.erase(packagePath);
   }
+  if (!packageNames.empty())
+    builder.addDepend<ProjectJsonExport>(path, std::move(packageNames));
 }
 
 int main(int argc, const char** argv) {
@@ -92,12 +131,13 @@ int main(int argc, const char** argv) {
   if (!projectDesc.dev.has_value()) throw ProjectNotBuildable(projectDesc.name);
   const auto& dev = projectDesc.dev.value();
 
+  ctx.debug = dev.debug;
+
   ExeBuilder builder;
   builder.setName("build").addSrc(dev.buildFile);
   std::unordered_set<Path> currentDeps{projectPath};
-  populateDepends(currentDeps, projectDesc, builder, packagesPath);
+  populateDepends(currentDeps, projectPath, projectDesc, builder, packagesPath);
 
-  Context ctx{"build", output, dev.debug};
   const auto result = builder.setCompiler(compiler).build(ctx);
 
   try {

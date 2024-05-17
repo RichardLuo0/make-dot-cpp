@@ -1,6 +1,15 @@
 export class ObjBuilder : public Builder {
  protected:
-  using ModuleMap = std::unordered_map<std::string, Ref<const NamedTarget>>;
+  using ModuleMap = std::unordered_map<std::string, Ref<const ModuleTarget>>;
+
+  std::optional<Ref<const ModuleTarget>> findPCM(
+      const std::string &moduleName) const {
+    for (auto &ex : exSet) {
+      const auto pcmOpt = ex->findPCM(moduleName);
+      if (pcmOpt.has_value()) return pcmOpt.value();
+    }
+    return std::nullopt;
+  }
 
   auto buildObjTargetList(ModuleMap &moduleMap) const {
     const auto unitList = buildUnitList();
@@ -31,18 +40,13 @@ export class ObjBuilder : public Builder {
         if (it != moduleMap.end())
           target.dependOn(it->second);
         else {
-          bool isFound = false;
-          for (auto &ex : exSet) {
-            const auto pcmOpt = ex->findPCM(dep);
-            if (pcmOpt.has_value()) {
-              const auto &pcm = pcmOpt.value();
-              moduleMap.emplace(dep, pcm);
-              target.dependOn(pcm);
-              isFound = true;
-              break;
-            }
-          }
-          if (!isFound) throw ModuleNotFound(unit.input, dep);
+          const auto pcmOpt = findPCM(dep);
+          if (pcmOpt.has_value()) {
+            const auto pcm = pcmOpt.value();
+            moduleMap.emplace(dep, pcm);
+            target.dependOn(pcm);
+          } else
+            throw ModuleNotFound(unit.input, dep);
         }
       }
     }

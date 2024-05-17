@@ -4,7 +4,6 @@
     "std",
     "boost",
     {
-      "name": "glob",
       "path": "packages/glob.json"
     }
   ],

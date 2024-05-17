@@ -5,18 +5,14 @@ import makeDotCpp.compiler;
 import makeDotCpp.fileProvider;
 import makeDotCpp.builder;
 
-import std_export;
-import boost_export;
-import glob_export;
+#include "project.json.hpp"
 
 using namespace makeDotCpp;
 namespace fs = std::filesystem;
 
 int main(int argc, const char **argv) {
   std::deque<std::shared_ptr<Export>> packages;
-  packages.emplace_back(create_std());
-  packages.emplace_back(create_boost());
-  packages.emplace_back(create_glob());
+  populatePackages(packages);
 
   Project::OptionParser op;
   op.parse(argc, argv);

@@ -139,11 +139,12 @@ export class Builder {
         const auto depJson = parseJson(depJsonPath);
         unitList.emplace_back(json::value_to<Unit>(depJson));
       } else {
+        const auto compileOptions = getCompilerOptions().compileOptions;
         auto &unit = unitList.emplace_back();
         unit.input = input;
-        unit.includeDeps = this->compiler->getIncludeDeps(input);
-        auto info = this->compiler->getModuleInfo(
-            input, getCompilerOptions().compileOptions);
+        unit.includeDeps =
+            this->compiler->getIncludeDeps(input, compileOptions);
+        auto info = this->compiler->getModuleInfo(input, compileOptions);
         unit.moduleName = info.name;
         unit.exported = info.exported;
         unit.moduleDeps = info.deps;

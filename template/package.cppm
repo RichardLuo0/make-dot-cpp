@@ -27,7 +27,8 @@ class PackageNotUsable : public std::exception {
 };
 
 export std::shared_ptr<Export> CONCAT(create_, MODULE_NAME)() {
-  auto projectDesc = ProjectDesc::create(STR(PROJECT_PATH), STR(PACKAGES_PATH));
+  auto projectDesc =
+      ProjectDesc::create(STR(PROJECT_JSON_PATH), STR(PACKAGES_PATH));
   if (std::holds_alternative<fs::path>(projectDesc.usage))
     throw PackageNotUsable(projectDesc.name);
   return std::get<0>(projectDesc.usage);
