@@ -17,17 +17,17 @@ int main(int argc, const char **argv) {
   Project::OptionParser op;
   op.parse(argc, argv);
 
-  Clang clang;
-  clang.addOption("-march=native -std=c++20 -O3 -Wall")
+  auto compiler = std::make_shared<Clang>();
+  compiler->addOption("-march=native -std=c++20 -O3 -Wall")
       .addOption("-I src/utils");
 
   LibBuilder libBuilder;
   libBuilder.setName("makeDotCpp")
-      .setCompiler(clang)
+      .setCompiler(compiler)
       .addSrc(Glob("src/**/module.cppm"));
 
   ExeBuilder builder;
-  builder.setName("make.cpp").setCompiler(clang).addSrc("src/main.cpp");
+  builder.setName("make.cpp").setCompiler(compiler).addSrc("src/main.cpp");
 
   for (auto &package : packages) {
     libBuilder.addDepend(package);

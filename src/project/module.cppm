@@ -24,6 +24,10 @@ namespace boost {
 namespace json {
 using namespace makeDotCpp;
 template <>
+struct is_sequence_like<FmtPath> : std::false_type {};
+template <>
+struct is_path_like<FmtPath> : std::true_type {};
+template <>
 struct is_described_class<Usage> : std::true_type {};
 template <>
 struct is_described_class<ProjectDesc> : std::true_type {};

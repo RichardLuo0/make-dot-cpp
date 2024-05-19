@@ -22,7 +22,7 @@ export struct ProjectDesc {
   };
   std::optional<Merge<Dev>> dev;
 
-  std::variant<std::shared_ptr<Merge<Usage>>, Path> usage;
+  std::variant<std::shared_ptr<Merge<Usage>>, Path, std::vector<Path>> usage;
 
   static ProjectDesc create(const Path& path, const Path& packagesPath) {
     const auto projectJsonPath =

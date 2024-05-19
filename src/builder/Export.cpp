@@ -69,11 +69,7 @@ struct TargetProxy : public T {
 };
 
 export struct ModuleTargetProxy : public TargetProxy<ModuleTarget> {
-  ModuleTargetProxy(
-      CLRef<ModuleTarget> target,
-      CLRef<const std::optional<Context>> ctx = std::nullopt,
-      CLRef<std::optional<CompilerOptions>> compilerOptions = std::nullopt)
-      : TargetProxy(target, ctx, compilerOptions) {}
+  using TargetProxy<ModuleTarget>::TargetProxy;
 
   const std::string& getName() const override { return target.getName(); };
 

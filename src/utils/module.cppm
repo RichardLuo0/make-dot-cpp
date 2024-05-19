@@ -1,6 +1,7 @@
 module;
 #include <boost/json.hpp>
 #include <boost/describe.hpp>
+#include <boost/algorithm/string.hpp>
 
 export module makeDotCpp.utils;
 
@@ -41,6 +42,13 @@ inline C replace(const C& c, auto&& item, auto&& newItem) {
   return cCopy;
 }
 
+export inline std::string replace(const std::string& str, const char* toReplace,
+                                  const char* newStr) {
+  std::string strCopy(str);
+  boost::replace_all(strCopy, toReplace, newStr);
+  return strCopy;
+}
+
 export json::value parseJson(const Path& path) {
   std::ifstream is(path);
   std::string input(std::istreambuf_iterator<char>(is), {});
@@ -74,18 +82,10 @@ Merge<T> tag_invoke(const json::value_to_tag<Merge<T>>&, const json::value& jv,
   });
   return t;
 }
+
+export template <class T>
+void tag_invoke(const json::value_from_tag&, json::value& jv,
+                const Merge<T>& merge) {
+  jv = json::value_from(static_cast<T>(merge));
+}
 }  // namespace makeDotCpp
-
-namespace boost {
-namespace json {
-export void tag_invoke(const json::value_from_tag&, json::value& jv,
-                       const Path& path) {
-  jv = path.generic_string();
-}
-
-export Path tag_invoke(const json::value_to_tag<Path>&,
-                           const json::value& jv) {
-  return Path(std::string(jv.as_string()));
-}
-}  // namespace json
-}  // namespace boost

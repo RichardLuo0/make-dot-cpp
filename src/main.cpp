@@ -4,6 +4,7 @@ import makeDotCpp.project;
 import makeDotCpp.compiler;
 import makeDotCpp.builder;
 import makeDotCpp.thread;
+import makeDotCpp.utils;
 
 #include "alias.hpp"
 #include "macro.hpp"
@@ -38,56 +39,69 @@ std::pair<std::shared_ptr<Export>, std::string> buildPackage(
     const Path& packagesPath) {
   const auto projectJsonPath =
       fs::canonical(fs::is_directory(path) ? path / "project.json" : path);
+  const auto projectPath = projectJsonPath.parent_path();
+
+  const auto currentPath = fs::current_path();
+  fs::current_path(projectPath);
   auto& projectDesc = findBuiltPackage(projectJsonPath, packagesPath);
   LibBuilder builder;
   builder.setName(projectDesc.name + "_export")
       .setCompiler(compiler)
       .define("NO_MAIN")
-      .define("MODULE_NAME=" + projectDesc.name)
+      .define("PROJECT_NAME=" + projectDesc.name)
       .define("PROJECT_JSON_PATH=" + projectJsonPath.generic_string())
       .define("PACKAGES_PATH=" + packagesPath.generic_string());
-  if (std::holds_alternative<Path>(projectDesc.usage)) {
-    builder.addSrc(std::get<Path>(projectDesc.usage));
-  } else {
-    builder.addSrc(packagesPath / "makeDotCpp/template/package.cppm");
-    auto& dev = projectDesc.dev.emplace();
-    dev.packages.emplace(fs::weakly_canonical(packagesPath / "std"));
-    dev.packages.emplace(fs::weakly_canonical(packagesPath / "makeDotCpp"));
-  }
+  std::visit(
+      [&](auto&& usage) {
+        using T = std::decay_t<decltype(usage)>;
+        if constexpr (std::is_same_v<T, Path>)
+          builder.addSrc(usage);
+        else if constexpr (std::is_same_v<T, std::vector<Path>>) {
+          for (auto& path : usage) {
+            builder.addSrc(path);
+          }
+        } else {
+          builder.addSrc(packagesPath / "makeDotCpp/template/package.cppm");
+          builder.define("\"USAGE=" + replace(usage->toJson(), "\"", "\\\"") +
+                         '\"');
+          auto& dev = projectDesc.dev.emplace();
+          dev.packages.emplace(fs::weakly_canonical(packagesPath / "std"));
+          dev.packages.emplace(
+              fs::weakly_canonical(packagesPath / "makeDotCpp"));
+        }
+      },
+      projectDesc.usage);
+  fs::current_path(currentPath);
+
   populateDepends(currentDeps, path, projectDesc, builder, packagesPath);
-  return {builder.createExport(projectJsonPath.parent_path(),
+  return {builder.createExport(projectPath,
                                ctx.output / "packages" / projectDesc.name),
           projectDesc.name};
 }
 
-struct ProjectJsonExport : public Export {
- private:
-  Path projectJson;
-  const std::vector<std::string> packageNames;
-
- public:
-  ProjectJsonExport(const Path& projectJson,
-                    std::vector<std::string>&& packageNames)
-      : projectJson(projectJson), packageNames(std::move(packageNames)) {}
-
-  std::string getCompileOption() const override {
-    const auto output =
-        ctx.output / "header" / (projectJson.filename() += ".hpp");
-    if (!fs::exists(output) ||
-        fs::last_write_time(output) < fs::last_write_time(projectJson)) {
-      fs::create_directories(output.parent_path());
-      std::ofstream os(output);
-      os.exceptions(std::ifstream::failbit);
-      for (auto& name : packageNames) {
-        os << "import " << name << "_export;\n";
-      }
-      os << "void populatePackages(auto&& packages) {\n";
-      for (auto& name : packageNames) {
-        os << "  packages.emplace_back(create_" << name << "());\n";
-      }
-      os << "}\n";
+void generateHeaderForProjectJson(
+    const Path& projectJson, const std::vector<std::string>& packageNames) {
+  const auto output =
+      ctx.output / "header" / (projectJson.filename() += ".hpp");
+  if (!fs::exists(output) ||
+      fs::last_write_time(output) < fs::last_write_time(projectJson)) {
+    fs::create_directories(output.parent_path());
+    std::ofstream os(output);
+    os.exceptions(std::ifstream::failbit);
+    for (auto& name : packageNames) {
+      os << "import " << name << "_export;\n";
     }
-    return "-I " + output.parent_path().generic_string();
+    os << "void populatePackages(auto&& packages) {\n";
+    for (auto& name : packageNames) {
+      os << "  packages.emplace_back(create_" << name << "());\n";
+    }
+    os << "}\n";
+  }
+}
+
+struct ProjectJsonExport : public Export {
+  std::string getCompileOption() const override {
+    return "-I " + (ctx.output / "header").generic_string();
   }
 };
 
@@ -110,8 +124,10 @@ void populateDepends(std::unordered_set<Path>& currentDeps, const Path& path,
     packageNames.emplace_back(pair.second);
     currentDeps.erase(packagePath);
   }
-  if (!packageNames.empty())
-    builder.addDepend<ProjectJsonExport>(path, std::move(packageNames));
+  if (!packageNames.empty()) {
+    generateHeaderForProjectJson(path, std::move(packageNames));
+    builder.addDepend<ProjectJsonExport>();
+  }
 }
 
 int main(int argc, const char** argv) {

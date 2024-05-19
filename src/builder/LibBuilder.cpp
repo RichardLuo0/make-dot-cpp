@@ -35,10 +35,29 @@ export struct LibTarget : public CachedTarget<> {
 export class LibBuilder : public ObjBuilder {
  protected:
   struct LibExport : public Export {
-   private:
+   protected:
     ModuleMap moduleMap;
     const TargetList targetList;
 
+   public:
+    LibExport(const LibBuilder &builder,
+              const std::optional<Context> &ctx = std::nullopt)
+        : targetList(builder.onBuild(moduleMap)) {}
+
+    virtual std::optional<Ref<const ModuleTarget>> findPCM(
+        const std::string &moduleName) const override {
+      const auto it = moduleMap.find(moduleName);
+      return it == moduleMap.end() ? std::nullopt
+                                   : std::make_optional(it->second);
+    };
+
+    std::optional<Ref<const Target>> getLibrary() const override {
+      return targetList.getTarget();
+    };
+  };
+
+  struct ExternalLibExport : public LibExport {
+   private:
     const std::optional<Context> ctx;
     const std::optional<CompilerOptions> compilerOptions;
     const TargetProxy<> target;
@@ -55,20 +74,20 @@ export class LibBuilder : public ObjBuilder {
     }
 
    public:
-    LibExport(const LibBuilder &builder,
-              const std::optional<Context> &ctx = std::nullopt)
-        : targetList(builder.onBuild(moduleMap)),
+    ExternalLibExport(const LibBuilder &builder,
+                      const std::optional<Context> &ctx)
+        : LibExport(builder),
           ctx(ctx),
           compilerOptions(builder.getCompilerOptions()),
           target(targetList.getTarget(), this->ctx, this->compilerOptions) {}
 
     virtual std::optional<Ref<const ModuleTarget>> findPCM(
         const std::string &moduleName) const override {
-      const auto it = moduleMap.find(moduleName);
-      return it == moduleMap.end()
-                 ? std::nullopt
-                 : std::make_optional(getFromCache(it->second));
-    };
+      const auto targetOpt = LibExport::findPCM(moduleName);
+      return targetOpt.has_value()
+                 ? std::make_optional(getFromCache(targetOpt.value().get()))
+                 : std::nullopt;
+    }
 
     std::optional<Ref<const Target>> getLibrary() const override {
       return target;
@@ -87,7 +106,8 @@ export class LibBuilder : public ObjBuilder {
                                        const Path &outputPath) const {
     auto currentPath = fs::current_path();
     fs::current_path(projectPath);
-    auto ex = std::make_shared<LibExport>(*this, Context{name, outputPath});
+    auto ex =
+        std::make_shared<ExternalLibExport>(*this, Context{name, outputPath});
     fs::current_path(currentPath);
     return ex;
   }

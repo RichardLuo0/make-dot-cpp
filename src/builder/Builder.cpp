@@ -140,14 +140,10 @@ export class Builder {
         unitList.emplace_back(json::value_to<Unit>(depJson));
       } else {
         const auto compileOptions = getCompilerOptions().compileOptions;
-        auto &unit = unitList.emplace_back();
-        unit.input = input;
-        unit.includeDeps =
-            this->compiler->getIncludeDeps(input, compileOptions);
-        auto info = this->compiler->getModuleInfo(input, compileOptions);
-        unit.moduleName = info.name;
-        unit.exported = info.exported;
-        unit.moduleDeps = info.deps;
+        const auto info = this->compiler->getModuleInfo(input, compileOptions);
+        auto &unit = unitList.emplace_back(
+            input, info.exported, info.name,
+            this->compiler->getIncludeDeps(input, compileOptions), info.deps);
         fs::create_directories(depJsonPath.parent_path());
         std::ofstream os(depJsonPath);
         os.exceptions(std::ifstream::failbit);

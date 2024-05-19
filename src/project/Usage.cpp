@@ -3,10 +3,12 @@ struct PackageJsonContext {
   const Path& packagesPath;
 };
 
-export struct FmtString : public std::string {};
-export struct FmtPath : public Path {};
+struct FmtString : public std::string {};
+struct FmtPath : public Path {
+  using Path::path;
+};
 
-struct Usage : public Export {
+export struct Usage : public Export {
  protected:
   struct BuiltTarget : public ModuleTarget {
    private:
@@ -39,6 +41,12 @@ struct Usage : public Export {
   FmtString linkOption;
   std::vector<std::string> libs;
 
+  static Usage create(const std::string& jsonStr) {
+    return json::value_to<Usage>(json::parse(jsonStr));
+  }
+
+  std::string toJson() { return json::serialize(json::value_from(*this)); }
+
   std::string getCompileOption() const override { return compileOption; }
 
   std::string getLinkOption() const override {
@@ -49,8 +57,10 @@ struct Usage : public Export {
     return lo;
   }
 
+ private:
   mutable std::unordered_map<std::string, BuiltTarget> cache;
 
+ public:
   std::optional<Ref<const ModuleTarget>> findPCM(
       const std::string& moduleName) const override {
     if (!pcmPath.has_value()) return std::nullopt;
