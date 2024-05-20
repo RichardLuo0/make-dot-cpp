@@ -76,9 +76,6 @@ export class Builder {
   chainVar(std::shared_ptr<const Compiler>, compiler, setCompiler);
 
  protected:
-  chainVar(Path, cachePath, ".cache/make.cpp", setCache);
-
- protected:
   chainVarSet(Path, srcSet, addSrc, src);
 
  protected:
@@ -126,10 +123,11 @@ export class Builder {
     return inputSet;
   }
 
-  UnitList buildUnitList() const {
+  UnitList buildUnitList(const Context &ctx) const {
     UnitList unitList;
     auto inputSet = buildInputSet();
     unitList.reserve(inputSet.size());
+    const auto cachePath = ctx.output / "cache";
     for (auto &input : inputSet) {
       const auto depJsonPath =
           cachePath / (absoluteProximate(input) += ".dep.json");
@@ -173,7 +171,7 @@ export class Builder {
     return co;
   }
 
-  virtual TargetList onBuild() const = 0;
+  virtual TargetList onBuild(const Context &ctx) const = 0;
 
  public:
   void buildCompileCommands(const Context &ctx) const {
@@ -193,7 +191,7 @@ export class Builder {
   }
 
   virtual BuildResult build(const Context &ctx) const {
-    const auto targetList = onBuild();
+    const auto targetList = onBuild(ctx);
     const auto &target = targetList.getTarget();
     BuilderContext builderCtx{ctx, compiler, getCompilerOptions()};
     target.build(builderCtx);

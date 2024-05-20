@@ -11,8 +11,8 @@ export class ObjBuilder : public Builder {
     return std::nullopt;
   }
 
-  auto buildObjTargetList(ModuleMap &moduleMap) const {
-    const auto unitList = buildUnitList();
+  auto buildObjTargetList(const Context &ctx, ModuleMap &moduleMap) const {
+    const auto unitList = buildUnitList(ctx);
     std::deque<std::unique_ptr<Target>> objList;
     std::vector<std::pair<Ref<ObjTarget>, Ref<const Unit>>> targetList;
     targetList.reserve(unitList.size());
@@ -53,8 +53,8 @@ export class ObjBuilder : public Builder {
     return objList;
   }
 
-  auto buildObjTargetList() const {
+  auto buildObjTargetList(const Context &ctx) const {
     ModuleMap moduleMap;
-    return buildObjTargetList(moduleMap);
+    return buildObjTargetList(ctx, moduleMap);
   }
 };

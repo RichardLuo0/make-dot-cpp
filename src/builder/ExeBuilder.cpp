@@ -40,10 +40,10 @@ export struct ExeTarget : public CachedTarget<> {
 
 export class ExeBuilder : public ObjBuilder {
  protected:
-  TargetList onBuild() const override {
+  TargetList onBuild(const Context &ctx) const override {
     TargetList list(std::in_place_type<ExeTarget>, name + POSTFIX);
     auto &target = list.getTarget<ExeTarget>();
-    target.dependOn(list.append(buildObjTargetList()));
+    target.dependOn(list.append(buildObjTargetList(ctx)));
     target.dependOn(buildExportLibList());
     return list;
   }

@@ -34,12 +34,12 @@ int main(int argc, const char **argv) {
     builder.addDepend(package);
   }
 
-  builder.addDepend(libBuilder.getExport());
-
   Project()
       .setName("make-dot-cpp")
       .setDebug(false)
       .setBuild([&](const Context &ctx) {
+        builder.addDepend(libBuilder.getExport(ctx));
+
         auto future = builder.build(ctx);
         try {
           future.get();

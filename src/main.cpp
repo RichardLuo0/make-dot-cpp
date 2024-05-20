@@ -16,7 +16,7 @@ defException(ProjectNotBuildable, (std::string name),
 defException(CyclicDependency, (Path path),
              "detected cyclic dependency: " + path.generic_string());
 
-Context ctx{"build", ".build"};
+Context ctx{"build", fs::weakly_canonical(".build")};
 std::shared_ptr<Compiler> compiler = std::make_shared<Clang>();
 
 std::unordered_map<Path, ProjectDesc> descCache;

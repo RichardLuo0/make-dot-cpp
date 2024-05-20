@@ -40,9 +40,8 @@ export class LibBuilder : public ObjBuilder {
     const TargetList targetList;
 
    public:
-    LibExport(const LibBuilder &builder,
-              const std::optional<Context> &ctx = std::nullopt)
-        : targetList(builder.onBuild(moduleMap)) {}
+    LibExport(const LibBuilder &builder, const Context &ctx)
+        : targetList(builder.onBuild(ctx, moduleMap)) {}
 
     virtual std::optional<Ref<const ModuleTarget>> findPCM(
         const std::string &moduleName) const override {
@@ -74,9 +73,8 @@ export class LibBuilder : public ObjBuilder {
     }
 
    public:
-    ExternalLibExport(const LibBuilder &builder,
-                      const std::optional<Context> &ctx)
-        : LibExport(builder),
+    ExternalLibExport(const LibBuilder &builder, const Context &ctx)
+        : LibExport(builder, ctx),
           ctx(ctx),
           compilerOptions(builder.getCompilerOptions()),
           target(targetList.getTarget(), this->ctx, this->compilerOptions) {}
@@ -97,8 +95,8 @@ export class LibBuilder : public ObjBuilder {
  public:
   mutable std::shared_ptr<LibExport> ex;
 
-  std::shared_ptr<Export> getExport() const {
-    if (ex == nullptr) ex = std::make_shared<LibExport>(*this);
+  std::shared_ptr<Export> getExport(const Context &ctx) const {
+    if (ex == nullptr) ex = std::make_shared<LibExport>(*this, ctx);
     return ex;
   }
 
@@ -112,16 +110,16 @@ export class LibBuilder : public ObjBuilder {
     return ex;
   }
 
-  TargetList onBuild(ModuleMap &map) const {
+  TargetList onBuild(const Context &ctx, ModuleMap &map) const {
     TargetList list(std::in_place_type<LibTarget>, "lib" + name + ".a");
     auto &target = list.getTarget<LibTarget>();
-    target.dependOn(list.append(buildObjTargetList(map)));
+    target.dependOn(list.append(buildObjTargetList(ctx, map)));
     target.dependOn(buildExportLibList());
     return list;
   }
 
-  TargetList onBuild() const override {
+  TargetList onBuild(const Context &ctx) const override {
     ModuleMap map;
-    return onBuild(map);
+    return onBuild(ctx, map);
   }
 };
