@@ -165,7 +165,7 @@ int main(int argc, const char** argv) {
 
     std::string args;
     for (std::size_t i = 1; i < argc; i++) {
-      args += std::string(" ") + argv[i];
+      args += std::to_string(' ') + argv[i];
     }
     Process::runNoRedirect(result.output.generic_string() + args);
   } catch (std::exception& e) {
