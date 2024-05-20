@@ -63,45 +63,81 @@ export struct ModuleTarget : public Target {
       BuilderContext &ctx) const = 0;
 };
 
-export struct UnitDeps {
+export template <class Target = Target>
+struct Deps {
+ protected:
+  std::deque<Ref<const Target>> targetDeps;
+
+  auto buildNodeList(BuilderContext &ctx) const {
+    NodeList nodeList;
+    for (auto &dep : targetDeps) {
+      const auto &nodeOpt = dep.get().build(ctx);
+      if (nodeOpt.has_value()) nodeList.emplace_back(nodeOpt.value());
+    }
+    auto outputList =
+        targetDeps | std::views::transform([&](const auto &target) {
+          return target.get().getOutput(ctx);
+        });
+    return std::pair{nodeList, outputList};
+  }
+
+ public:
+  void dependOn(const std::ranges::range auto &targets) {
+    for (auto &target : targets) {
+      targetDeps.emplace_back(target);
+    }
+  }
+
+  void dependOn(CLRef<ModuleTarget> target) { targetDeps.emplace_back(target); }
+};
+
+export struct UnitDeps : public Deps<ModuleTarget> {
+ public:
+  defException(CyclicModuleDependency, (std::ranges::range auto &&visited),
+               "detected cyclic module dependency: " +
+                   (visited |
+                    std::views::transform([](auto *target) -> std::string {
+                      return target->getName() + ' ';
+                    }) |
+                    std::views::join | ranges::to<std::string>()));
+
  private:
   const std::deque<Path> includeDeps;
-  std::deque<Ref<const ModuleTarget>> targetDeps;
 
  protected:
   UnitDeps(const std::deque<Path> &includeDeps) : includeDeps(includeDeps) {}
 
   std::optional<NodeList> buildNodeList(BuilderContext &ctx,
                                         const Path &output) const {
-    NodeList nodeList;
-    for (auto &dep : targetDeps) {
-      const auto &nodeOpt = dep.get().build(ctx);
-      if (nodeOpt.has_value()) nodeList.emplace_back(nodeOpt.value());
-    }
-    auto targetOutputList =
-        targetDeps | std::views::transform([&](const auto &target) {
-          return target.get().getOutput(ctx);
-        });
+    const auto [nodeList, outputList] = Deps::buildNodeList(ctx);
     return ctx.isNeedUpdate(output, includeDeps) ||
-                   ctx.isNeedUpdate(output, targetOutputList)
+                   ctx.isNeedUpdate(output, outputList)
                ? std::make_optional(nodeList)
                : std::nullopt;
   }
 
-  // TODO Cycle detection
   std::unordered_map<std::string, Path> getModuleMap(
+      std::unordered_set<const ModuleTarget *> visited,
       BuilderContext &ctx) const {
     std::unordered_map<std::string, Path> map;
     for (auto &mod : targetDeps) {
       const auto &pcm = mod.get();
+      if (visited.contains(&pcm)) throw CyclicModuleDependency(visited);
+      visited.emplace(&pcm);
+
       map.emplace(pcm.getName(), pcm.getOutput(ctx));
       map.merge(pcm.getModuleMap(ctx));
+
+      visited.erase(&pcm);
     }
     return map;
   }
 
- public:
-  void dependOn(const ModuleTarget &target) { targetDeps.emplace_back(target); }
+  std::unordered_map<std::string, Path> getModuleMap(
+      BuilderContext &ctx) const {
+    std::unordered_set<const ModuleTarget *> visited;
+    return getModuleMap(visited, ctx);
+  }
 };
 
 export struct PCMTarget : public UnitDeps, public CachedTarget<ModuleTarget> {

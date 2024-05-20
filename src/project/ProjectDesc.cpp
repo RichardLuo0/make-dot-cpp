@@ -2,7 +2,7 @@ export struct PackagePath : public Path {
   using Hash = std::hash<Path>;
 };
 
-export defException(PackageNotBuilt, (std::string name),
+export defException(PackageNotBuilt, (const std::string& name),
                     name + " is not built");
 
 export struct ProjectDesc {

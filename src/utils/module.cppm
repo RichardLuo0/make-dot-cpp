@@ -15,6 +15,7 @@ using LRef = std::add_lvalue_reference_t<T>;
 export template <typename T>
 using CLRef = std::add_lvalue_reference_t<std::add_const_t<T>>;
 
+namespace ranges {
 export template <std::ranges::range C, std::size_t N>
 class concatView : public std::ranges::view_interface<concatView<C, N>> {
  private:
@@ -34,6 +35,17 @@ export template <std::ranges::range C>
 inline auto concat(C&& first, auto&&... cs) noexcept {
   return concatView<C, 1 + sizeof...(cs)>{std::forward<C>(first), cs...};
 }
+
+export template <class C>
+struct to {};
+
+export template <class C>
+C operator|(std::ranges::range auto&& range, to<C> to) {
+  C result;
+  std::ranges::copy(range.begin(), range.end(), std::back_inserter(result));
+  return result;
+}
+}  // namespace ranges
 
 export template <std::ranges::range C>
 inline C replace(const C& c, auto&& item, auto&& newItem) {
