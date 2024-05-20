@@ -44,9 +44,8 @@ std::pair<std::shared_ptr<Export>, std::string> buildPackage(
   const auto currentPath = fs::current_path();
   fs::current_path(projectPath);
   auto& projectDesc = findBuiltPackage(projectJsonPath, packagesPath);
-  LibBuilder builder;
-  builder.setName(projectDesc.name + "_export")
-      .setCompiler(compiler)
+  LibBuilder builder(projectDesc.name + "_export");
+  builder.setCompiler(compiler)
       .define("NO_MAIN")
       .define("PROJECT_NAME=" + projectDesc.name)
       .define("PROJECT_JSON_PATH=" + projectJsonPath.generic_string())
@@ -99,12 +98,6 @@ void generateHeaderForProjectJson(
   }
 }
 
-struct ProjectJsonExport : public Export {
-  std::string getCompileOption() const override {
-    return "-I " + (ctx.output / "header").generic_string();
-  }
-};
-
 void populateDepends(std::unordered_set<Path>& visited, const Path& path,
                      const ProjectDesc& desc, Builder& builder,
                      const Path& packagesPath) {
@@ -126,7 +119,7 @@ void populateDepends(std::unordered_set<Path>& visited, const Path& path,
   }
   if (!packageNames.empty()) {
     generateHeaderForProjectJson(path, std::move(packageNames));
-    builder.addDepend<ProjectJsonExport>();
+    builder.include(ctx.output / "header");
   }
 }
 
@@ -149,8 +142,8 @@ int main(int argc, const char** argv) {
 
   ctx.debug = dev.debug;
 
-  ExeBuilder builder;
-  builder.setName("build").addSrc(dev.buildFile);
+  ExeBuilder builder("build");
+  builder.addSrc(dev.buildFile);
   std::unordered_set<Path> visited{projectPath};
   populateDepends(visited, projectPath, projectDesc, builder, packagesPath);
 

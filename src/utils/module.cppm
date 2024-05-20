@@ -45,6 +45,10 @@ C operator|(std::ranges::range auto&& range, to<C> to) {
   std::ranges::copy(range.begin(), range.end(), std::back_inserter(result));
   return result;
 }
+
+export template <class C, class Item>
+concept range = std::ranges::range<C> &&
+                std::is_convertible_v<typename C::value_type, Item>;
 }  // namespace ranges
 
 export template <std::ranges::range C>
@@ -61,9 +65,13 @@ export inline std::string replace(const std::string& str, const char* toReplace,
   return strCopy;
 }
 
-export json::value parseJson(const Path& path) {
+export std::string readAsStr(const Path& path) {
   std::ifstream is(path);
-  std::string input(std::istreambuf_iterator<char>(is), {});
+  return std::string(std::istreambuf_iterator<char>(is), {});
+}
+
+export json::value parseJson(const Path& path) {
+  const auto input = readAsStr(path);
   return json::parse(input);
 }
 

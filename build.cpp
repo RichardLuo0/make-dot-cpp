@@ -21,13 +21,11 @@ int main(int argc, const char **argv) {
   compiler->addOption("-march=native -std=c++20 -O3 -Wall")
       .addOption("-I src/utils");
 
-  LibBuilder libBuilder;
-  libBuilder.setName("makeDotCpp")
-      .setCompiler(compiler)
-      .addSrc(Glob("src/**/module.cppm"));
+  LibBuilder libBuilder("makeDotCpp");
+  libBuilder.setCompiler(compiler).addSrc(Glob("src/**/module.cppm"));
 
-  ExeBuilder builder;
-  builder.setName("make.cpp").setCompiler(compiler).addSrc("src/main.cpp");
+  ExeBuilder builder("make.cpp");
+  builder.setCompiler(compiler).addSrc("src/main.cpp");
 
   for (auto &package : packages) {
     libBuilder.addDepend(package);

@@ -21,8 +21,7 @@ export struct VFSContext {
                               : fs::last_write_time(path);
   }
 
-  bool isNeedUpdate(const Path &output,
-                    const std::ranges::range auto &deps) const {
+  bool isNeedUpdate(const Path &output, std::ranges::range auto &&deps) const {
     if (!exists(output))
       return true;
     else {

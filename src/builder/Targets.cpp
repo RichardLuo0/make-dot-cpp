@@ -63,10 +63,10 @@ export struct ModuleTarget : public Target {
       BuilderContext &ctx) const = 0;
 };
 
-export template <class Target = Target>
+export template <class T = Target>
 struct Deps {
  protected:
-  std::deque<Ref<const Target>> targetDeps;
+  std::deque<Ref<const T>> targetDeps;
 
   auto buildNodeList(BuilderContext &ctx) const {
     NodeList nodeList;
@@ -82,16 +82,33 @@ struct Deps {
   }
 
  public:
-  void dependOn(const std::ranges::range auto &targets) {
+  void dependOn(const ranges::range<Ref<const T>> auto &targets) {
     for (auto &target : targets) {
       targetDeps.emplace_back(target);
     }
   }
 
-  void dependOn(CLRef<ModuleTarget> target) { targetDeps.emplace_back(target); }
+  void dependOn(CLRef<T> target) { targetDeps.emplace_back(target); }
 };
 
-export struct UnitDeps : public Deps<ModuleTarget> {
+export struct FilesDeps {
+ protected:
+  std::deque<Path> filesDeps;
+
+ public:
+  FilesDeps() = default;
+  FilesDeps(const std::deque<Path> &filesDeps) : filesDeps(filesDeps) {}
+
+  void dependOn(const ranges::range<Ref<Path>> auto &paths) {
+    for (auto &path : paths) {
+      filesDeps.emplace_back(path);
+    }
+  }
+
+  void dependOn(const Path &path) { filesDeps.emplace_back(path); }
+};
+
+export struct UnitDeps : public Deps<ModuleTarget>, public FilesDeps {
  public:
   defException(CyclicModuleDependency, (std::ranges::range auto &&visited),
                "detected cyclic module dependency: " +
@@ -101,16 +118,13 @@ export struct UnitDeps : public Deps<ModuleTarget> {
                     }) |
                     std::views::join | ranges::to<std::string>()));
 
- private:
-  const std::deque<Path> includeDeps;
-
  protected:
-  UnitDeps(const std::deque<Path> &includeDeps) : includeDeps(includeDeps) {}
+  using FilesDeps::FilesDeps;
 
   std::optional<NodeList> buildNodeList(BuilderContext &ctx,
                                         const Path &output) const {
     const auto [nodeList, outputList] = Deps::buildNodeList(ctx);
-    return ctx.isNeedUpdate(output, includeDeps) ||
+    return ctx.isNeedUpdate(output, filesDeps) ||
                    ctx.isNeedUpdate(output, outputList)
                ? std::make_optional(nodeList)
                : std::nullopt;
@@ -124,10 +138,8 @@ export struct UnitDeps : public Deps<ModuleTarget> {
       const auto &pcm = mod.get();
       if (visited.contains(&pcm)) throw CyclicModuleDependency(visited);
       visited.emplace(&pcm);
-
       map.emplace(pcm.getName(), pcm.getOutput(ctx));
       map.merge(pcm.getModuleMap(ctx));
-
       visited.erase(&pcm);
     }
     return map;
@@ -138,6 +150,10 @@ export struct UnitDeps : public Deps<ModuleTarget> {
     std::unordered_set<const ModuleTarget *> visited;
     return getModuleMap(visited, ctx);
   }
+
+ public:
+  using Deps<ModuleTarget>::dependOn;
+  using FilesDeps::dependOn;
 };
 
 export struct PCMTarget : public UnitDeps, public CachedTarget<ModuleTarget> {
@@ -221,6 +237,10 @@ export struct ObjTarget : public CachedTarget<> {
 
   void dependOn(const ModuleTarget &target) {
     std::visit([&](auto &&internal) { internal.dependOn(target); }, internal);
+  }
+
+  void dependOn(const Path &path) {
+    std::visit([&](auto &&internal) { internal.dependOn(path); }, internal);
   }
 
  protected:

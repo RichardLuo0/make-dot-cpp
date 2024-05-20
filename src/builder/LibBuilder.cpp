@@ -76,8 +76,23 @@ export class LibBuilder : public ObjBuilder {
     };
   };
 
- public:
   mutable std::shared_ptr<LibExport> ex;
+
+  TargetList onBuild(const Context &ctx, ModuleMap &map) const {
+    TargetList list(std::in_place_type<LibTarget>, "lib" + name + ".a");
+    auto &target = list.getTarget<LibTarget>();
+    target.dependOn(list.append(buildObjTargetList(ctx, map)));
+    target.dependOn(buildExportLibList());
+    return list;
+  }
+
+  TargetList onBuild(const Context &ctx) const override {
+    ModuleMap map;
+    return onBuild(ctx, map);
+  }
+
+ public:
+  using ObjBuilder::ObjBuilder;
 
   std::shared_ptr<Export> getExport(const Context &ctx) const {
     if (ex == nullptr) ex = std::make_shared<LibExport>(*this, ctx);
@@ -92,18 +107,5 @@ export class LibBuilder : public ObjBuilder {
         std::make_shared<ExternalLibExport>(*this, Context{name, outputPath});
     fs::current_path(currentPath);
     return ex;
-  }
-
-  TargetList onBuild(const Context &ctx, ModuleMap &map) const {
-    TargetList list(std::in_place_type<LibTarget>, "lib" + name + ".a");
-    auto &target = list.getTarget<LibTarget>();
-    target.dependOn(list.append(buildObjTargetList(ctx, map)));
-    target.dependOn(buildExportLibList());
-    return list;
-  }
-
-  TargetList onBuild(const Context &ctx) const override {
-    ModuleMap map;
-    return onBuild(ctx, map);
   }
 };

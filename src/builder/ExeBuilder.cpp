@@ -4,7 +4,9 @@
 #define POSTFIX ""
 #endif
 
-export struct ExeTarget : public CachedTarget<>, public Deps<> {
+export struct ExeTarget : public CachedTarget<>,
+                          public Deps<>,
+                          public FilesDeps {
  public:
   ExeTarget(const Path &output) : CachedTarget(output) {}
 
@@ -20,15 +22,22 @@ export struct ExeTarget : public CachedTarget<>, public Deps<> {
     }
     return std::nullopt;
   }
+
+  using Deps<>::dependOn;
+  using FilesDeps::dependOn;
 };
 
 export class ExeBuilder : public ObjBuilder {
+ public:
+  using ObjBuilder::ObjBuilder;
+
  protected:
   TargetList onBuild(const Context &ctx) const override {
     TargetList list(std::in_place_type<ExeTarget>, name + POSTFIX);
     auto &target = list.getTarget<ExeTarget>();
     target.dependOn(list.append(buildObjTargetList(ctx)));
     target.dependOn(buildExportLibList());
+    target.dependOn(getLinkOptionsJson(ctx));
     return list;
   }
 };

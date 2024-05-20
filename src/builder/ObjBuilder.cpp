@@ -28,6 +28,7 @@ export class ObjBuilder : public Builder {
       } else
         obj =
             std::make_unique<ObjTarget>(unit.input, unit.includeDeps, objPath);
+      obj->dependOn(getCompileOptionsJson(ctx));
       targetList.emplace_back(*obj, unit);
       objList.emplace_back(std::move(obj));
     }
@@ -57,4 +58,7 @@ export class ObjBuilder : public Builder {
     ModuleMap moduleMap;
     return buildObjTargetList(ctx, moduleMap);
   }
+
+ public:
+  using Builder::Builder;
 };

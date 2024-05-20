@@ -11,6 +11,12 @@ export struct Unit {
                        (), ())
 };
 
+struct BuilderState {
+  Path compileOptionsJson, linkOptionsJson;
+  std::unordered_set<Path> inputSet;
+  std::vector<Unit> unitList;
+};
+
 Path absoluteProximate(const Path &x, const Path &y = fs::current_path()) {
   Path common;
   auto it = y.begin();
@@ -36,8 +42,6 @@ export struct BuildResult {
 export class Builder {
  protected:
   friend struct BuilderContext;
-
-  using UnitList = std::vector<Unit>;
 
   struct TargetList {
    private:
@@ -70,7 +74,7 @@ export class Builder {
   };
 
  protected:
-  chainVar(std::string, name, "defaultName", setName);
+  std::string name = "builder";
 
  protected:
   chainVar(std::shared_ptr<const Compiler>, compiler, setCompiler);
@@ -81,15 +85,78 @@ export class Builder {
  protected:
   chainVarSet(std::shared_ptr<const Export>, exSet, addDepend, ex);
 
+ protected:
+  const Path cache = "cache/" + name;
+
  private:
+  struct IsOptionsOutdated {
+   private:
+    std::unordered_map<const Context *, bool> map;
+
+   public:
+    bool &at(const Context &ctx) {
+      const auto it = map.find(&ctx);
+      return it != map.end() ? it->second
+                             : map.emplace(&ctx, true).first->second;
+    }
+
+    void setOutdated(bool isOutdated = true) {
+      for (auto &pair : map) {
+        pair.second = isOutdated;
+      }
+    }
+  };
+
+  mutable IsOptionsOutdated isCompileOptionsJsonOutdated;
+  mutable IsOptionsOutdated isLinkOptionsJsonOutdated;
+
   CompilerOptions compilerOptions;
+
+  const Path _compileOptionsJson{cache / "compileOptions.txt"};
+  const Path _linkOptionsJson{cache / "linkOptions.txt"};
+
+  void updateCacheFile(const Path &path, const std::string &content) const {
+    if (!fs::exists(path) || readAsStr(path) != content) {
+      std::ofstream os(path);
+      os << content;
+    }
+  }
+
+ protected:
+  Path getCompileOptionsJson(const Context &ctx) const {
+    const auto json = ctx.output / _compileOptionsJson;
+    bool &isOutdated = isCompileOptionsJsonOutdated.at(ctx);
+    if (isOutdated) {
+      updateCacheFile(json, compilerOptions.compileOptions);
+      isOutdated = false;
+    }
+    return json;
+  }
+
+  Path getLinkOptionsJson(const Context &ctx) const {
+    const auto json = ctx.output / _linkOptionsJson;
+    bool &isOutdated = isLinkOptionsJsonOutdated.at(ctx);
+    if (isOutdated) {
+      updateCacheFile(json, compilerOptions.linkOptions);
+      isOutdated = false;
+    }
+    return json;
+  }
 
   chainMethod(addSrc, FileProvider, p) { srcSet.merge(p.list()); }
   chainMethod(define, std::string, d) {
     compilerOptions.compileOptions += " -D " + d;
+    isCompileOptionsJsonOutdated.setOutdated();
+    isCompilerOptionsOutdated = true;
+  }
+  chainMethod(include, Path, path) {
+    compilerOptions.compileOptions += " -I " + path.generic_string();
+    isCompileOptionsJsonOutdated.setOutdated();
+    isCompilerOptionsOutdated = true;
   }
 
  public:
+  Builder(const std::string &name) : name(name) {}
   virtual ~Builder() = default;
 
   template <class C>
@@ -103,6 +170,8 @@ export class Builder {
     requires std::is_base_of_v<Export, E>
   inline auto &addDepend(Args &&...args) {
     this->exSet.emplace(std::make_shared<const E>(std::forward<Args>(args)...));
+    isCompilerOptionsOutdated = true;
+    isExportLibListOutdated = true;
     return *this;
   }
 
@@ -110,11 +179,13 @@ export class Builder {
     requires(std::is_base_of_v<Export, E> && !std::is_const_v<E>)
   inline auto &addDepend(E &&ex) {
     this->exSet.emplace(std::make_shared<const E>(std::move(ex)));
+    isCompilerOptionsOutdated = true;
+    isExportLibListOutdated = true;
     return *this;
   }
 
  protected:
-  std::unordered_set<Path> buildInputSet() const {
+  auto buildInputSet() const {
     std::unordered_set<Path> inputSet;
     for (const auto &src : this->srcSet) {
       const auto input = fs::canonical(src);
@@ -123,25 +194,28 @@ export class Builder {
     return inputSet;
   }
 
-  UnitList buildUnitList(const Context &ctx) const {
-    UnitList unitList;
+  auto buildUnitList(const Context &ctx) const {
+    std::vector<Unit> unitList;
     auto inputSet = buildInputSet();
     unitList.reserve(inputSet.size());
-    const auto cachePath = ctx.output / "cache";
+    const auto cachePath = ctx.output / cache / "units";
     for (auto &input : inputSet) {
       const auto depJsonPath =
-          cachePath / (absoluteProximate(input) += ".dep.json");
+          cachePath / (absoluteProximate(input) += ".json");
+      const auto compileOptionsJson = getCompileOptionsJson(ctx);
       if (fs::exists(depJsonPath) &&
-          fs::last_write_time(depJsonPath) > fs::last_write_time(input)) {
+          fs::last_write_time(depJsonPath) > fs::last_write_time(input) &&
+          fs::last_write_time(depJsonPath) >
+              fs::last_write_time(compileOptionsJson)) {
         std::ifstream is(depJsonPath);
         const auto depJson = parseJson(depJsonPath);
         unitList.emplace_back(json::value_to<Unit>(depJson));
       } else {
         const auto compileOptions = getCompilerOptions().compileOptions;
-        const auto info = this->compiler->getModuleInfo(input, compileOptions);
+        const auto info = compiler->getModuleInfo(input, compileOptions);
         auto &unit = unitList.emplace_back(
             input, info.exported, info.name,
-            this->compiler->getIncludeDeps(input, compileOptions), info.deps);
+            compiler->getIncludeDeps(input, compileOptions), info.deps);
         fs::create_directories(depJsonPath.parent_path());
         std::ofstream os(depJsonPath);
         os.exceptions(std::ifstream::failbit);
@@ -151,24 +225,40 @@ export class Builder {
     return unitList;
   }
 
+ private:
+  mutable bool isExportLibListOutdated = true;
+  mutable std::deque<Ref<const Target>> _libList;
+
+ public:
   auto buildExportLibList() const {
-    std::deque<Ref<const Target>> libList;
-    for (auto &ex : exSet) {
-      const auto lib = ex->getLibrary();
-      if (lib.has_value()) libList.emplace_back(lib.value());
+    if (isExportLibListOutdated) {
+      _libList.clear();
+      for (auto &ex : exSet) {
+        const auto lib = ex->getLibrary();
+        if (lib.has_value()) _libList.emplace_back(lib.value());
+      }
+      isExportLibListOutdated = false;
     }
-    return libList;
+    return _libList;
   }
 
+ private:
+  mutable bool isCompilerOptionsOutdated = true;
+  mutable CompilerOptions _co;
+
+ protected:
   CompilerOptions getCompilerOptions() const {
-    CompilerOptions co;
-    for (auto &ex : exSet) {
-      co.compileOptions += ' ' + ex->getCompileOption();
-      co.linkOptions += ' ' + ex->getLinkOption();
+    if (isCompilerOptionsOutdated) {
+      _co = CompilerOptions();
+      for (auto &ex : exSet) {
+        _co.compileOptions += ' ' + ex->getCompileOption();
+        _co.linkOptions += ' ' + ex->getLinkOption();
+      }
+      _co.compileOptions += ' ' + compilerOptions.compileOptions;
+      _co.linkOptions += ' ' + compilerOptions.linkOptions;
+      isCompilerOptionsOutdated = false;
     }
-    co.compileOptions += ' ' + compilerOptions.compileOptions;
-    co.linkOptions += ' ' + compilerOptions.linkOptions;
-    return co;
+    return _co;
   }
 
   virtual TargetList onBuild(const Context &ctx) const = 0;
@@ -191,6 +281,8 @@ export class Builder {
   }
 
   virtual BuildResult build(const Context &ctx) const {
+    updateCacheFile(getCompileOptionsJson(ctx), compilerOptions.compileOptions);
+    updateCacheFile(getLinkOptionsJson(ctx), compilerOptions.linkOptions);
     const auto targetList = onBuild(ctx);
     const auto &target = targetList.getTarget();
     BuilderContext builderCtx{ctx, compiler, getCompilerOptions()};
