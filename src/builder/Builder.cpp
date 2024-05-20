@@ -54,7 +54,7 @@ export class Builder {
       target = std::make_unique<T>(std::forward<decltype(args)>(args)...);
     }
 
-    auto append(std::ranges::range auto &&anotherList) {
+    auto append(ranges::range<std::unique_ptr<Target>> auto &&anotherList) {
       std::vector<Ref<const Target>> targetRefList;
       targetRefList.reserve(anotherList.size());
       for (auto &t : anotherList) {

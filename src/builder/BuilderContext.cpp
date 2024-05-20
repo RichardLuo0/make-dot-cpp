@@ -21,7 +21,8 @@ export struct VFSContext {
                               : fs::last_write_time(path);
   }
 
-  bool isNeedUpdate(const Path &output, std::ranges::range auto &&deps) const {
+  bool isNeedUpdate(const Path &output,
+                    ranges::range<const Path> auto &&deps) const {
     if (!exists(output))
       return true;
     else {
@@ -78,7 +79,8 @@ export struct BuilderContext : public VFSContext {
   }
 
 #define GENERATE_COMPILE_METHOD(NAME, INPUT, LOGNAME, FUNC)                  \
-  template <std::ranges::range Deps = std::ranges::empty_view<Ref<Node>>>    \
+  template <ranges::range<Ref<Node>> Deps =                                  \
+                std::ranges::empty_view<Ref<Node>>>                          \
   Node &NAME(INPUT, const Path &output,                                      \
              const Deps &deps = std::views::empty<Ref<Node>>) {              \
     addFile(output);                                                         \

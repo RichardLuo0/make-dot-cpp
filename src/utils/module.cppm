@@ -47,8 +47,10 @@ C operator|(std::ranges::range auto&& range, to<C> to) {
 }
 
 export template <class C, class Item>
-concept range = std::ranges::range<C> &&
-                std::is_convertible_v<typename C::value_type, Item>;
+concept range = requires(C c) {
+  { *std::ranges::begin(c) } -> std::convertible_to<Item&>;
+  { *std::ranges::end(c) } -> std::convertible_to<Item&>;
+};
 }  // namespace ranges
 
 export template <std::ranges::range C>
