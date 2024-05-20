@@ -32,8 +32,8 @@ class concatView : public std::ranges::view_interface<concatView<C, N>> {
 };
 
 export template <std::ranges::range C>
-inline auto concat(C&& first, auto&&... cs) noexcept {
-  return concatView<C, 1 + sizeof...(cs)>{std::forward<C>(first), cs...};
+inline auto concat(C& first, auto&&... cs) noexcept {
+  return concatView<C, 1 + sizeof...(cs)>{first, cs...};
 }
 
 export template <class C>
@@ -47,11 +47,21 @@ C operator|(std::ranges::range auto&& range, to<C> to) {
 }
 
 export template <class C, class Item>
-concept range = requires(C c) {
-  { *std::ranges::begin(c) } -> std::convertible_to<Item&>;
-  { *std::ranges::end(c) } -> std::convertible_to<Item&>;
-};
+concept range = std::ranges::range<C> &&
+                std::is_convertible_v<std::ranges::range_value_t<C>, Item>;
 }  // namespace ranges
+
+export template <class T>
+inline auto concat(auto&&... cs) noexcept {
+  std::vector<T> container;
+  auto emplace = [&](auto&& c) {
+    for (const auto& e : c) {
+      container.emplace_back(e);
+    }
+  };
+  (emplace(cs), ...);
+  return container;
+}
 
 export template <std::ranges::range C>
 inline C replace(const C& c, auto&& item, auto&& newItem) {

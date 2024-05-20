@@ -124,8 +124,7 @@ export struct UnitDeps : public Deps<ModuleTarget>, public FilesDeps {
   std::optional<NodeList> buildNodeList(BuilderContext &ctx,
                                         const Path &output) const {
     const auto [nodeList, outputList] = Deps::buildNodeList(ctx);
-    return ctx.isNeedUpdate(output, filesDeps) ||
-                   ctx.isNeedUpdate(output, outputList)
+    return ctx.isNeedUpdate(output, concat<Path>(filesDeps, outputList))
                ? std::make_optional(nodeList)
                : std::nullopt;
   }
