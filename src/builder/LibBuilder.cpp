@@ -10,7 +10,7 @@ export struct LibTarget : public CachedTarget<>, public Deps<> {
     const auto [nodeList, objView] = Deps::buildNodeList(ctx);
     const Path output = getOutput(ctx);
     if (!objView.empty() && ctx.isNeedUpdate(output, objView)) {
-      return ctx.archive({objView.begin(), objView.end()}, output, nodeList);
+      return ctx.archive(objView, output, nodeList);
     }
     return std::nullopt;
   }

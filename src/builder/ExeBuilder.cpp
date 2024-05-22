@@ -18,7 +18,7 @@ export struct ExeTarget : public CachedTarget<>,
     const auto [nodeList, objView] = Deps::buildNodeList(ctx);
     const Path output = getOutput(ctx);
     if (!objView.empty() && ctx.isNeedUpdate(output, objView)) {
-      return ctx.link({objView.begin(), objView.end()}, output, nodeList);
+      return ctx.link(objView, output, nodeList);
     }
     return std::nullopt;
   }

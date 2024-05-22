@@ -1,6 +1,7 @@
 #pragma once
 
 #define COMMA ,
+#define UNPACK(...) __VA_ARGS__
 
 #define UNUSED(x) (void)x;
 

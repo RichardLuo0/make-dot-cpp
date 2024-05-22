@@ -78,45 +78,51 @@ export struct BuilderContext : public VFSContext {
     return 0;
   }
 
-#define GENERATE_COMPILE_METHOD(NAME, INPUT, LOGNAME, FUNC)                  \
-  template <ranges::range<Ref<Node>> Deps =                                  \
-                std::ranges::empty_view<Ref<Node>>>                          \
-  Node &NAME(INPUT, const Path &output,                                      \
-             const Deps &deps = std::views::empty<Ref<Node>>) {              \
-    addFile(output);                                                         \
-    return collect(ctx.depGraph.addNode(                                     \
-        [=, &ctx = this->ctx, compiler = this->compiler,                     \
-         compilerOptions = this->compilerOptions,                            \
-         id = id++](DepGraph &graph) {                                       \
-          UNUSED(ctx);                                                       \
-          UNUSED(compilerOptions);                                           \
-          Logger::info(std::format("\033[0;34m[{}] " #LOGNAME ": {}\033[0m", \
-                                   id, output.generic_string()));            \
-          Logger::flush();                                                   \
-          return handleResult(FUNC, graph);                                  \
-        },                                                                   \
-        deps));                                                              \
+#define GENERATE_COMPILE_METHOD(NAME, INPUT, CAPTURE, LOGNAME, FUNC)        \
+  template <ranges::range<Ref<Node>> Deps =                                 \
+                std::ranges::empty_view<Ref<Node>>>                         \
+  Node &NAME(UNPACK INPUT, const Path &output,                              \
+             const Deps &deps = std::views::empty<Ref<Node>>) {             \
+    addFile(output);                                                        \
+    return collect(ctx.depGraph.addNode(                                    \
+        [=, id = id++, UNPACK CAPTURE](DepGraph &graph) {                   \
+          Logger::info(std::format("\033[0;34m[{}] " LOGNAME ": {}\033[0m", \
+                                   id, output.generic_string()));           \
+          Logger::flush();                                                  \
+          return handleResult(FUNC, graph);                                 \
+        },                                                                  \
+        deps));                                                             \
   }
 
   GENERATE_COMPILE_METHOD(
       compilePCM,
-      const Path &input
-          COMMA const std::unordered_map<std::string COMMA Path> &moduleMap,
-      Compiling pcm,
+      (const Path &input,
+       const std::unordered_map<std::string, Path> &moduleMap),
+      (compiler = this->compiler, compilerOptions = this->compilerOptions),
+      "Compiling pcm",
       compiler->compilePCM(input, output, moduleMap,
                            compilerOptions.compileOptions));
   GENERATE_COMPILE_METHOD(
       compile,
-      const Path &input
-          COMMA const std::unordered_map<std::string COMMA Path> &moduleMap,
-      Compiling obj,
-      compiler->compile(input, output, ctx.debug, moduleMap,
-                        compilerOptions.compileOptions));
-  GENERATE_COMPILE_METHOD(link, const std::vector<Path> &objList, Linking,
+      (const Path &input,
+       const std::unordered_map<std::string, Path> &moduleMap),
+      (&ctx = this->ctx, compiler = this->compiler,
+       compileOptions = this->compilerOptions.compileOptions),
+      "Compiling obj",
+      compiler->compile(input, output, ctx.debug, moduleMap, compileOptions));
+  GENERATE_COMPILE_METHOD(link, (ranges::range<Path> auto &&objList),
+                          (&ctx = this->ctx, compiler = this->compiler,
+                           objList = objList | ranges::to<std::vector<Path>>(),
+                           linkOptions = this->compilerOptions.linkOptions),
+                          "Linking",
                           compiler->link(objList, output, ctx.debug,
-                                         compilerOptions.linkOptions));
-  GENERATE_COMPILE_METHOD(archive, const std::vector<Path> &objList, Archiving,
-                          compiler->archive(objList, output, ctx.debug));
+                                         linkOptions));
+  GENERATE_COMPILE_METHOD(archive, (ranges::range<Path> auto &&objList),
+                          (compiler = this->compiler,
+                           objList = objList | ranges::to<std::vector<Path>>()),
+                          "Archiving",
+                          compiler->archive({objList.begin(), objList.end()},
+                                            output));
 #undef GENERATE_COMPILE_METHOD
 };
 

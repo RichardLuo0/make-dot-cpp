@@ -79,9 +79,8 @@ export class Clang : public Compiler {
   }
 
   GENERATE_COMPILE_METHOD(archive,
-                          (const std::vector<Path> &input, const Path &output,
-                           bool isDebug = false),
-                          (input, output, isDebug)) {
+                          (const std::vector<Path> &input, const Path &output),
+                          (input, output)) {
     std::string objList;
     for (auto &obj : input) {
       objList += obj.generic_string() + ' ';

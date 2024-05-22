@@ -30,8 +30,8 @@ export class Compiler {
                                  const Path &output, bool isDebug = false,
                                  const std::string &extraOptions = ""));
 
-  GENERATE_COMPILE_METHOD(archive, (const std::vector<Path> &input,
-                                    const Path &output, bool isDebug = false));
+  GENERATE_COMPILE_METHOD(archive,
+                          (const std::vector<Path> &input, const Path &output));
 #undef GENERATE_COMPILE_METHOD
 
   virtual std::deque<Path> getIncludeDeps(
