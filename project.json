@@ -13,17 +13,5 @@
       "std",
       "makeDotCpp"
     ]
-  },
-  "usage": {
-    "compileOption": "-fprebuilt-module-path={0}/lib",
-    "linkOption": "{0}/lib/libmakeDotCpp.dll.a",
-    "libs": [
-      "boost_filesystem-mt",
-      "ws2_32",
-      "boost_json-mt",
-      "boost_program_options-mt",
-      "boost_atomic-mt",
-      "boost_container-mt"
-    ]
   }
 }
