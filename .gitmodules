@@ -1,0 +1,3 @@
+[submodule "glob"]
+	path = packages/glob
+	url = https://github.com/p-ranav/glob.git
