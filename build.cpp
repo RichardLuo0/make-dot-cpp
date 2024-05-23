@@ -8,7 +8,6 @@ import makeDotCpp.builder;
 #include "project.json.hpp"
 
 using namespace makeDotCpp;
-namespace fs = std::filesystem;
 
 int main(int argc, const char **argv) {
   std::deque<std::shared_ptr<Export>> packages;
@@ -28,15 +27,15 @@ int main(int argc, const char **argv) {
   builder.setCompiler(compiler).addSrc("src/main.cpp");
 
   for (auto &package : packages) {
-    libBuilder.addDepend(package);
-    builder.addDepend(package);
+    libBuilder.dependOn(package);
+    builder.dependOn(package);
   }
 
   Project()
       .setName("make-dot-cpp")
       .setDebug(false)
       .setBuild([&](const Context &ctx) {
-        builder.addDepend(libBuilder.getExport(ctx));
+        builder.dependOn(libBuilder.getExport(ctx));
 
         auto future = builder.build(ctx);
         try {

@@ -62,20 +62,21 @@ export class Project {
   }
 
  public:
+  ~Project() { ctx.threadPool.wait(); }
+
   void build() {
     ensureOutputExists();
     this->buildFunc(ctx);
-    ctx.threadPool.wait();
   }
 
   void release() {
-    ensureOutputExists();
-    this->buildFunc(ctx);
-    this->releaseFunc(ctx);
     ctx.threadPool.wait();
+    this->releaseFunc(ctx);
   }
 
-  void watch() {}
+  void watch() {
+    // TODO
+  }
 
   void clean() { fs::remove_all(ctx.output); }
 

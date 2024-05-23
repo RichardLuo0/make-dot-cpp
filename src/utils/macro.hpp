@@ -45,23 +45,12 @@
 #define chainVarList(TYPE, NAME, SETTER_NAME, VALUE) \
   std::deque<TYPE> NAME;                             \
                                                      \
- public:                                             \
-  inline auto &SETTER_NAME(const TYPE &VALUE) {      \
-    NAME.emplace_back(VALUE);                        \
-    return *this;                                    \
-  }                                                  \
-                                                     \
- private:
+  chainMethod(SETTER_NAME, TYPE, VALUE)
+
 #define chainVarSet(TYPE, NAME, SETTER_NAME, VALUE) \
   std::unordered_set<TYPE> NAME;                    \
                                                     \
- public:                                            \
-  inline auto &SETTER_NAME(const TYPE &VALUE) {     \
-    NAME.emplace(VALUE);                            \
-    return *this;                                   \
-  }                                                 \
-                                                    \
- private:
+  chainMethod(SETTER_NAME, TYPE, VALUE)
 
 #define defException(NAME, ARGS, MSG)                                   \
   class NAME : public std::exception {                                  \

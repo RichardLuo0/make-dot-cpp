@@ -1,7 +1,7 @@
 {
   "name": "glob",
   "usage": {
-    "compileOption": "-I {}/glob/include",
-    "linkOption": "{}/../build/packages/glob/libglob.a"
+    "compileOption": "-I {0}/glob/include",
+    "linkOption": "{0}/../build/packages/glob/libglob.a"
   }
 }

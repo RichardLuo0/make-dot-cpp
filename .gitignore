@@ -5,5 +5,4 @@ build/
 build-*/
 .clangd
 interface/
-packages/**/
 compile_commands.json

@@ -80,10 +80,14 @@ export class Builder {
   chainVar(std::shared_ptr<const Compiler>, compiler, setCompiler);
 
  protected:
-  chainVarSet(Path, srcSet, addSrc, src);
+  chainVarSet(Path, srcSet, addSrc, src) { srcSet.emplace(src); };
 
  protected:
-  chainVarSet(std::shared_ptr<const Export>, exSet, addDepend, ex);
+  chainVarSet(std::shared_ptr<const Export>, exSet, dependOn, ex) {
+    exSet.emplace(ex);
+    isCompilerOptionsOutdated = true;
+    isExportLibListOutdated = true;
+  }
 
  protected:
   const Path cache = "cache/" + name;
@@ -168,20 +172,19 @@ export class Builder {
 
   template <class E, class... Args>
     requires std::is_base_of_v<Export, E>
-  inline auto &addDepend(Args &&...args) {
-    this->exSet.emplace(std::make_shared<const E>(std::forward<Args>(args)...));
-    isCompilerOptionsOutdated = true;
-    isExportLibListOutdated = true;
+  inline auto &dependOn(Args &&...args) {
+    dependOn(std::make_shared<const E>(std::forward<Args>(args)...));
     return *this;
   }
 
   template <class E>
     requires(std::is_base_of_v<Export, E> && !std::is_const_v<E>)
-  inline auto &addDepend(E &&ex) {
-    this->exSet.emplace(std::make_shared<const E>(std::move(ex)));
-    isCompilerOptionsOutdated = true;
-    isExportLibListOutdated = true;
-    return *this;
+  inline auto &dependOn(E &&ex) {
+    return dependOn(std::move(ex));
+  }
+
+  chainMethod(dependOn, ranges::range<std::shared_ptr<Export>> auto, exs) {
+    for (auto &ex : exs) dependOn(ex);
   }
 
  protected:

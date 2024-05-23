@@ -47,7 +47,13 @@ export struct Usage : public Export {
 
   std::string toJson() { return json::serialize(json::value_from(*this)); }
 
-  std::string getCompileOption() const override { return compileOption; }
+  std::string getCompileOption() const override {
+    if (pcmPath.has_value())
+      return "-fprebuilt-module-path=" + pcmPath.value().generic_string() +
+             ' ' + compileOption;
+    else
+      return compileOption;
+  }
 
   std::string getLinkOption() const override {
     std::string lo = linkOption;

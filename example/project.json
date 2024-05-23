@@ -6,7 +6,6 @@
   "dev": {
     "debug": true,
     "packages": [
-      "std",
       "makeDotCpp"
     ]
   }

@@ -1,5 +1,4 @@
-#include <iostream>
-
+import std;
 import makeDotCpp;
 import makeDotCpp.project;
 import makeDotCpp.compiler;
@@ -24,7 +23,7 @@ int main(int argc, const char **argv) {
   builder.setCompiler(clang).addSrc(Glob("src/**/*.cpp*"));
 
   for (auto &package : packages) {
-    builder.addDepend(package);
+    builder.dependOn(package);
   }
 
   Project()

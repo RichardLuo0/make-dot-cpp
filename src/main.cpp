@@ -11,147 +11,156 @@ import makeDotCpp.utils;
 
 using namespace makeDotCpp;
 
-defException(ProjectNotBuildable, (const std::string& name),
-             name + " is not buildable");
 defException(CyclicDependency, (const Path& path),
              "detected cyclic dependency: " + path.generic_string());
 
-Context ctx{"build", fs::weakly_canonical(".build")};
-std::shared_ptr<Compiler> compiler = std::make_shared<Clang>();
+class BuildCppProject {
+ private:
+  Context ctx{"build", fs::weakly_canonical(".build")};
+  const Path packagesPath;
+  std::shared_ptr<Compiler> compiler = std::make_shared<Clang>();
+  ExeBuilder buildCppBuilder{"build"};
+  std::unordered_set<std::string> exportPackageNames;
 
-std::unordered_map<Path, ProjectDesc> descCache;
+  std::unordered_set<Path> builtExportPackageSet;
+  using ExportSet = std::unordered_set<std::shared_ptr<Export>>;
+  std::unordered_map<Path, ExportSet> builtPackageMap;
+  std::unordered_set<Path> visitedBuiltPackageSet;
 
-void populateDepends(std::unordered_set<Path>& visited, const Path& path,
-                     const ProjectDesc& desc, Builder& builder,
-                     const Path& packagesPath);
+ public:
+  BuildCppProject(const Path& projectJsonPath, const Path& packagesPath)
+      : packagesPath(packagesPath) {
+    compiler->addOption("-march=native -std=c++20 -Wall");
+#ifdef _WIN32
+    compiler->addOption("-D _WIN32");
+#endif
 
-ProjectDesc& findBuiltPackage(Path path, const Path& packagesPath) {
-  path = fs::weakly_canonical(path);
-  const auto it = descCache.find(path);
-  return it != descCache.end()
-             ? it->second
-             : descCache.emplace(path, ProjectDesc::create(path, packagesPath))
-                   .first->second;
-}
+    const auto projectDesc = ProjectDesc::create(projectJsonPath, packagesPath);
+    buildCppBuilder.setCompiler(compiler).addSrc(projectDesc.dev.buildFile);
+    ctx.debug = projectDesc.dev.debug;
 
-std::pair<std::shared_ptr<Export>, std::string> buildPackage(
-    std::unordered_set<Path>& visited, const Path& path,
-    const Path& packagesPath) {
-  const auto projectJsonPath =
-      fs::canonical(fs::is_directory(path) ? path / "project.json" : path);
-  const auto projectPath = projectJsonPath.parent_path();
+    for (auto& path : projectDesc.packages) {
+      buildExportPackage(path);
+    }
 
-  const auto currentPath = fs::current_path();
-  fs::current_path(projectPath);
-  auto& projectDesc = findBuiltPackage(projectJsonPath, packagesPath);
-  LibBuilder builder(projectDesc.name + "_export");
-  builder.setCompiler(compiler)
-      .define("NO_MAIN")
-      .define("PROJECT_NAME=" + projectDesc.name)
-      .define("PROJECT_JSON_PATH=" + projectJsonPath.generic_string())
-      .define("PACKAGES_PATH=" + packagesPath.generic_string());
-  std::visit(
-      [&](auto&& usage) {
-        using T = std::decay_t<decltype(usage)>;
-        if constexpr (std::is_same_v<T, Path>)
-          builder.addSrc(usage);
-        else if constexpr (std::is_same_v<T, std::vector<Path>>) {
-          for (auto& path : usage) {
-            builder.addSrc(path);
+    for (auto& path : projectDesc.dev.packages) {
+      buildCppBuilder.dependOn(findBuiltPackage(path));
+    }
+
+    if (!exportPackageNames.empty()) {
+      generateHeaderForProjectJson(projectJsonPath,
+                                   std::move(exportPackageNames));
+      buildCppBuilder.include(ctx.output / "header");
+    }
+  }
+
+  ~BuildCppProject() { ctx.threadPool.wait(); }
+
+  auto build() { return buildCppBuilder.build(ctx); }
+
+ protected:
+  void buildExportPackage(const Path& path) {
+    const auto projectJsonPath =
+        fs::canonical(fs::is_directory(path) ? path / "project.json" : path);
+    const auto projectPath = projectJsonPath.parent_path();
+    if (builtExportPackageSet.contains(projectJsonPath)) return;
+    builtExportPackageSet.emplace(projectJsonPath);
+
+    const auto currentPath = fs::current_path();
+    fs::current_path(projectPath);
+    auto projectDesc = ProjectDesc::create(projectJsonPath, packagesPath);
+    LibBuilder builder(projectDesc.name + "_export");
+    builder.setCompiler(compiler)
+        .define("NO_MAIN")
+        .define("PROJECT_NAME=" + projectDesc.name)
+        .define("PROJECT_JSON_PATH=" + projectJsonPath.generic_string())
+        .define("PACKAGES_PATH=" + packagesPath.generic_string());
+    std::visit(
+        [&](auto&& usage) {
+          using T = std::decay_t<decltype(usage)>;
+          if constexpr (std::is_same_v<T, Path>)
+            builder.addSrc(usage);
+          else if constexpr (std::is_same_v<T, std::vector<Path>>) {
+            for (auto& path : usage) {
+              builder.addSrc(path);
+            }
+          } else {
+            builder.addSrc(packagesPath / "makeDotCpp/template/package.cppm");
+            builder.define("\"USAGE=" + replace(usage->toJson(), "\"", "\\\"") +
+                           '\"');
+            projectDesc.dev.packages.emplace(
+                fs::weakly_canonical(packagesPath / "std"));
+            projectDesc.dev.packages.emplace(
+                fs::weakly_canonical(packagesPath / "makeDotCpp"));
           }
-        } else {
-          builder.addSrc(packagesPath / "makeDotCpp/template/package.cppm");
-          builder.define("\"USAGE=" + replace(usage->toJson(), "\"", "\\\"") +
-                         '\"');
-          auto& dev = projectDesc.dev.emplace();
-          dev.packages.emplace(fs::weakly_canonical(packagesPath / "std"));
-          dev.packages.emplace(
-              fs::weakly_canonical(packagesPath / "makeDotCpp"));
-        }
-      },
-      projectDesc.usage);
-  fs::current_path(currentPath);
+        },
+        projectDesc.usage);
+    fs::current_path(currentPath);
 
-  populateDepends(visited, path, projectDesc, builder, packagesPath);
-  return {builder.createExport(projectPath,
-                               ctx.output / "packages" / projectDesc.name),
-          projectDesc.name};
-}
-
-void generateHeaderForProjectJson(
-    const Path& projectJson, const std::vector<std::string>& packageNames) {
-  const auto output =
-      ctx.output / "header" / (projectJson.filename() += ".hpp");
-  if (!fs::exists(output) ||
-      fs::last_write_time(output) < fs::last_write_time(projectJson)) {
-    fs::create_directories(output.parent_path());
-    std::ofstream os(output);
-    os.exceptions(std::ifstream::failbit);
-    for (auto& name : packageNames) {
-      os << "import " << name << "_export;\n";
-    }
-    os << "void populatePackages(auto&& packages) {\n";
-    for (auto& name : packageNames) {
-      os << "  packages.emplace_back(create_" << name << "());\n";
-    }
-    os << "}\n";
-  }
-}
-
-void populateDepends(std::unordered_set<Path>& visited, const Path& path,
-                     const ProjectDesc& desc, Builder& builder,
-                     const Path& packagesPath) {
-  if (desc.dev.has_value())
-    for (auto& packagePath : desc.dev.value().packages) {
-      builder.addDepend(
-          findBuiltPackage(packagePath, packagesPath).getExport());
+    for (auto& path : projectDesc.packages) {
+      buildExportPackage(path);
     }
 
-  std::vector<std::string> packageNames;
-  packageNames.reserve(desc.packages.size());
-  for (auto& packagePath : desc.packages) {
-    if (visited.contains(packagePath)) throw CyclicDependency(packagePath);
-    visited.emplace(packagePath);
-    auto pair = buildPackage(visited, packagePath, packagesPath);
-    builder.addDepend(pair.first);
-    packageNames.emplace_back(pair.second);
-    visited.erase(packagePath);
+    for (auto& path : projectDesc.dev.packages) {
+      builder.dependOn(findBuiltPackage(path));
+    }
+
+    buildCppBuilder.dependOn(builder.createExport(
+        projectPath, ctx.output / "packages" / projectDesc.name));
+    exportPackageNames.emplace(projectDesc.name);
   }
-  if (!packageNames.empty()) {
-    generateHeaderForProjectJson(path, std::move(packageNames));
-    builder.include(ctx.output / "header");
+
+  const ExportSet& findBuiltPackage(const Path& path) {
+    const auto projectJsonPath =
+        fs::canonical(fs::is_directory(path) ? path / "project.json" : path);
+    auto it = builtPackageMap.find(projectJsonPath);
+    if (it != builtPackageMap.end()) return it->second;
+    if (visitedBuiltPackageSet.contains(projectJsonPath))
+      throw CyclicDependency(projectJsonPath);
+    visitedBuiltPackageSet.emplace(projectJsonPath);
+
+    auto projectDesc = ProjectDesc::create(projectJsonPath, packagesPath);
+    ExportSet exSet{projectDesc.getExport()};
+    for (auto& path : projectDesc.packages) {
+      auto& packageExSet = findBuiltPackage(path);
+      exSet.insert(packageExSet.begin(), packageExSet.end());
+    }
+
+    visitedBuiltPackageSet.erase(projectJsonPath);
+    return builtPackageMap.emplace(projectJsonPath, std::move(exSet))
+        .first->second;
   }
-}
+
+  void generateHeaderForProjectJson(
+      const Path& projectJson, ranges::range<std::string> auto&& packageNames) {
+    const auto output =
+        ctx.output / "header" / (projectJson.filename() += ".hpp");
+    if (!fs::exists(output) ||
+        fs::last_write_time(output) < fs::last_write_time(projectJson)) {
+      fs::create_directories(output.parent_path());
+      std::ofstream os(output);
+      os.exceptions(std::ifstream::failbit);
+      for (auto& name : packageNames) {
+        os << "import " << name << "_export;\n";
+      }
+      os << "void populatePackages(auto&& packages) {\n";
+      for (auto& name : packageNames) {
+        os << "  packages.emplace_back(" << name << "_export::getExport());\n";
+      }
+      os << "}\n";
+    }
+  }
+};
 
 int main(int argc, const char** argv) {
   Project::OptionParser op;
   op.add_options()("no-build", "do not build the project");
   op.parse(argc, argv);
-  const auto packagesPath = op.getPackagesPath();
-
-  compiler->addOption("-march=native -std=c++20 -Wall");
-#ifdef _WIN32
-  compiler->addOption("-D _WIN32");
-#endif
-
-  const auto projectPath = fs::weakly_canonical("project.json");
-  const auto projectDesc = ProjectDesc::create(projectPath, packagesPath);
-
-  if (!projectDesc.dev.has_value()) throw ProjectNotBuildable(projectDesc.name);
-  const auto& dev = projectDesc.dev.value();
-
-  ctx.debug = dev.debug;
-
-  ExeBuilder builder("build");
-  builder.addSrc(dev.buildFile);
-  std::unordered_set<Path> visited{projectPath};
-  populateDepends(visited, projectPath, projectDesc, builder, packagesPath);
-
-  const auto result = builder.setCompiler(compiler).build(ctx);
+  BuildCppProject project(fs::canonical("project.json"), op.getPackagesPath());
 
   try {
+    auto result = project.build();
     result.get();
-    ctx.threadPool.wait();
     std::cout << "\033[0;32mBuilt " << result.output << "\033[0m" << std::endl;
 
     if (op.contains("no-build")) return 0;
@@ -164,4 +173,5 @@ int main(int argc, const char** argv) {
   } catch (std::exception& e) {
     std::cerr << "\033[0;31mError: " << e.what() << "\033[0m" << std::endl;
   }
+  return 0;
 }

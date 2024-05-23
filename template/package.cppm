@@ -13,6 +13,8 @@ import makeDotCpp.project;
 
 using namespace makeDotCpp;
 
-export std::shared_ptr<Export> CONCAT(create_, PROJECT_NAME)() {
-  return std::make_shared<Usage>(Usage::create(STR(USAGE)));
-}
+namespace CONCAT(PROJECT_NAME, _export) {
+std::shared_ptr<Export> ex = std::make_shared<Usage>(Usage::create(STR(USAGE)));
+
+export std::shared_ptr<Export> getExport() { return ex; }
+}  // namespace CONCAT(PROJECT_NAME,_export)

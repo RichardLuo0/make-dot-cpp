@@ -20,7 +20,7 @@ export struct ProjectDesc {
     BOOST_DESCRIBE_CLASS(Dev, (), (buildFile, compiler, debug, packages), (),
                          ())
   };
-  std::optional<Merge<Dev>> dev;
+  Merge<Dev> dev;
 
   std::variant<std::shared_ptr<Merge<Usage>>, Path, std::vector<Path>> usage;
 
