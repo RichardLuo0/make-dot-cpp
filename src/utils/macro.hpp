@@ -2,8 +2,9 @@
 
 #define COMMA ,
 #define UNPACK(...) __VA_ARGS__
-
 #define UNUSED(x) (void)x;
+#define _STR(...) #__VA_ARGS__
+#define STR(...) _STR(__VA_ARGS__)
 
 #define OVERLOAD_2(_1, _2, NAME, ...) NAME
 #define OVERLOAD_3(_1, _2, _3, NAME, ...) NAME

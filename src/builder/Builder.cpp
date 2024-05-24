@@ -72,7 +72,7 @@ export class Builder {
  protected:
   chainVarSet(std::shared_ptr<const Export>, exSet, dependOn, ex) {
     exSet.emplace(ex);
-    isCompilerOptionsOutdated = true;
+    coOpt.reset();
     isExportLibListOutdated = true;
   }
 
@@ -80,31 +80,28 @@ export class Builder {
   const Path cache = "cache/" + name;
 
  private:
-  struct IsOptionsOutdated {
+  struct OptionsCache {
    private:
-    std::unordered_map<const Context *, bool> map;
+    std::unordered_map<const Context *, std::optional<Path>> map;
 
    public:
-    bool &at(const Context &ctx) {
+    std::optional<Path> &at(const Context &ctx) {
       const auto it = map.find(&ctx);
       return it != map.end() ? it->second
-                             : map.emplace(&ctx, true).first->second;
+                             : map.emplace(&ctx, std::nullopt).first->second;
     }
 
-    void setOutdated(bool isOutdated = true) {
+    void setOutdated() {
       for (auto &pair : map) {
-        pair.second = isOutdated;
+        pair.second.reset();
       }
     }
   };
 
-  mutable IsOptionsOutdated isCompileOptionsJsonOutdated;
-  mutable IsOptionsOutdated isLinkOptionsJsonOutdated;
-
   CompilerOptions compilerOptions;
 
-  const Path _compileOptionsJson{cache / "compileOptions.txt"};
-  const Path _linkOptionsJson{cache / "linkOptions.txt"};
+  mutable OptionsCache compileOptionsCache;
+  mutable OptionsCache linkOptionsCache;
 
   void updateCacheFile(const Path &path, const std::string &content) const {
     if (!fs::exists(path) || readAsStr(path) != content) {
@@ -114,36 +111,30 @@ export class Builder {
   }
 
  protected:
-  Path getCompileOptionsJson(const Context &ctx) const {
-    const auto json = ctx.output / _compileOptionsJson;
-    bool &isOutdated = isCompileOptionsJsonOutdated.at(ctx);
-    if (isOutdated) {
-      updateCacheFile(json, compilerOptions.compileOptions);
-      isOutdated = false;
-    }
-    return json;
+#define GENERATE_GET_OPTIONS_JSON_METHOD(NAME, OPTIONS)                       \
+  Path NAME(const Context &ctx) const {                                       \
+    auto &pathOpt = OPTIONS##Cache.at(ctx);                                   \
+    if (!pathOpt.has_value()) {                                               \
+      auto &json = pathOpt.emplace(ctx.output / cache / STR(OPTIONS) ".txt"); \
+      updateCacheFile(json, compilerOptions.OPTIONS);                         \
+    }                                                                         \
+    return pathOpt.value();                                                   \
   }
 
-  Path getLinkOptionsJson(const Context &ctx) const {
-    const auto json = ctx.output / _linkOptionsJson;
-    bool &isOutdated = isLinkOptionsJsonOutdated.at(ctx);
-    if (isOutdated) {
-      updateCacheFile(json, compilerOptions.linkOptions);
-      isOutdated = false;
-    }
-    return json;
-  }
+  GENERATE_GET_OPTIONS_JSON_METHOD(getCompileOptionsJson, compileOptions);
+  GENERATE_GET_OPTIONS_JSON_METHOD(getLinkOptionsJson, linkOptions);
+#undef GENERATE_GET_OPTIONS_JSON_METHOD
 
   chainMethod(addSrc, FileProvider, p) { srcSet.merge(p.list()); }
   chainMethod(define, std::string, d) {
     compilerOptions.compileOptions += " -D " + d;
-    isCompileOptionsJsonOutdated.setOutdated();
-    isCompilerOptionsOutdated = true;
+    compileOptionsCache.setOutdated();
+    coOpt.reset();
   }
   chainMethod(include, Path, path) {
     compilerOptions.compileOptions += " -I " + path.generic_string();
-    isCompileOptionsJsonOutdated.setOutdated();
-    isCompilerOptionsOutdated = true;
+    compileOptionsCache.setOutdated();
+    coOpt.reset();
   }
 
  public:
@@ -240,22 +231,20 @@ export class Builder {
   }
 
  private:
-  mutable bool isCompilerOptionsOutdated = true;
-  mutable CompilerOptions _co;
+  mutable std::optional<CompilerOptions> coOpt;
 
  protected:
   CompilerOptions getCompilerOptions() const {
-    if (isCompilerOptionsOutdated) {
-      _co = CompilerOptions();
+    if (!coOpt.has_value()) {
+      auto &co = coOpt.emplace();
       for (auto &ex : exSet) {
-        _co.compileOptions += ' ' + ex->getCompileOption();
-        _co.linkOptions += ' ' + ex->getLinkOption();
+        co.compileOptions += ' ' + ex->getCompileOption();
+        co.linkOptions += ' ' + ex->getLinkOption();
       }
-      _co.compileOptions += ' ' + compilerOptions.compileOptions;
-      _co.linkOptions += ' ' + compilerOptions.linkOptions;
-      isCompilerOptionsOutdated = false;
+      co.compileOptions += ' ' + compilerOptions.compileOptions;
+      co.linkOptions += ' ' + compilerOptions.linkOptions;
     }
-    return _co;
+    return coOpt.value();
   }
 
   virtual TargetList onBuild(const Context &ctx) const = 0;
