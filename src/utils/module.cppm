@@ -40,8 +40,17 @@ export template <class C>
 struct to {};
 
 export template <class C>
-C operator|(std::ranges::range auto&& range, to<C> to) {
+inline C operator|(std::ranges::range auto&& range, to<C> to) {
   C result;
+  std::ranges::copy(range.begin(), range.end(), std::back_inserter(result));
+  return result;
+}
+
+export template <class Item>
+inline std::vector<Item> operator|(std::ranges::range auto&& range,
+                                   to<std::vector<Item>> to) {
+  std::vector<Item> result;
+  result.reserve(std::ranges::size(range));
   std::ranges::copy(range.begin(), range.end(), std::back_inserter(result));
   return result;
 }
@@ -77,14 +86,34 @@ export inline std::string replace(const std::string& str, const char* toReplace,
   return strCopy;
 }
 
-export std::string readAsStr(const Path& path) {
+export inline std::string readAsStr(const Path& path) {
   std::ifstream is(path);
   return std::string(std::istreambuf_iterator<char>(is), {});
 }
 
-export json::value parseJson(const Path& path) {
+export inline json::value parseJson(const Path& path) {
   const auto input = readAsStr(path);
   return json::parse(input);
+}
+
+export inline Path commonBase(const ranges::range<Path> auto& pathList) {
+  Path result;
+  if (pathList.size() == 0) return result;
+  if (pathList.size() == 1) return pathList.begin()->parent_path();
+  auto itList =
+      pathList | std::views::drop(1) | std::views::transform([](auto&& path) {
+        return std::make_pair(path.begin(), --path.end());
+      }) |
+      ranges::to<std::vector<std::pair<Path::iterator, Path::iterator>>>();
+  for (auto folder : *pathList.begin()) {
+    for (auto& pair : itList) {
+      auto& [it, end] = pair;
+      if (!(it != end && folder == *it)) return result;
+      it++;
+    }
+    result /= folder;
+  }
+  return result;
 }
 
 export template <class T, class Ctx>

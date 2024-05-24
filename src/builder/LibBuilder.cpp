@@ -99,13 +99,9 @@ export class LibBuilder : public ObjBuilder {
     return ex;
   }
 
-  std::shared_ptr<Export> createExport(const Path &projectPath,
-                                       const Path &outputPath) const {
-    auto currentPath = fs::current_path();
-    fs::current_path(projectPath);
+  std::shared_ptr<Export> createExport(const Path &outputPath) const {
     auto ex =
         std::make_shared<ExternalLibExport>(*this, Context{name, outputPath});
-    fs::current_path(currentPath);
     return ex;
   }
 };

@@ -17,19 +17,6 @@ struct BuilderState {
   std::vector<Unit> unitList;
 };
 
-Path absoluteProximate(const Path &x, const Path &y = fs::current_path()) {
-  Path common;
-  auto it = y.begin();
-  for (auto folder : x) {
-    if (folder == *it) {
-      common /= folder;
-    } else
-      break;
-    it++;
-  }
-  return fs::proximate(x, common);
-}
-
 export struct BuildResult {
   Path output;
   mutable FutureList futureList;
@@ -188,23 +175,25 @@ export class Builder {
   }
 
  protected:
-  auto buildInputSet() const {
+  // A pair consists of a set of input src file and a common base
+  using InputInfo = std::pair<std::unordered_set<Path>, Path>;
+
+  InputInfo buildInputInfo() const {
     std::unordered_set<Path> inputSet;
-    for (const auto &src : this->srcSet) {
-      const auto input = fs::canonical(src);
-      inputSet.emplace(input);
+    for (const auto &src : srcSet) {
+      inputSet.emplace(fs::canonical(src));
     }
-    return inputSet;
+    return std::make_pair(std::move(inputSet), commonBase(inputSet));
   }
 
-  auto buildUnitList(const Context &ctx) const {
+  auto buildUnitList(const Context &ctx, const InputInfo &inputInfo) const {
+    const auto &[inputSet, base] = inputInfo;
     std::vector<Unit> unitList;
-    auto inputSet = buildInputSet();
     unitList.reserve(inputSet.size());
     const auto cachePath = ctx.output / cache / "units";
     for (auto &input : inputSet) {
       const auto depJsonPath =
-          cachePath / (absoluteProximate(input) += ".json");
+          cachePath / (fs::proximate(input, base) += ".json");
       const auto compileOptionsJson = getCompileOptionsJson(ctx);
       if (fs::exists(depJsonPath) &&
           fs::last_write_time(depJsonPath) > fs::last_write_time(input) &&
@@ -226,6 +215,11 @@ export class Builder {
       }
     }
     return unitList;
+  }
+
+  auto buildUnitList(const Context &ctx) const {
+    const auto inputInfo = buildInputInfo();
+    return buildUnitList(ctx, inputInfo);
   }
 
  private:
@@ -269,8 +263,10 @@ export class Builder {
  public:
   void buildCompileCommands(const Context &ctx) const {
     json::array compileCommands;
-    for (const auto &input : buildInputSet()) {
-      const auto output = ctx.objPath() / (absoluteProximate(input) += ".obj");
+    auto [inputSet, base] = buildInputInfo();
+    for (const auto &input : inputSet) {
+      const auto output =
+          ctx.objPath() / (fs::proximate(input, base) += ".obj");
       json::object commandObject;
       commandObject["directory"] = ctx.output.generic_string();
       commandObject["command"] =

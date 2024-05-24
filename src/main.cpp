@@ -66,8 +66,6 @@ class BuildCppProject {
     if (builtExportPackageSet.contains(projectJsonPath)) return;
     builtExportPackageSet.emplace(projectJsonPath);
 
-    const auto currentPath = fs::current_path();
-    fs::current_path(projectPath);
     auto projectDesc = ProjectDesc::create(projectJsonPath, packagesPath);
     LibBuilder builder(projectDesc.name + "_export");
     builder.setCompiler(compiler)
@@ -95,7 +93,6 @@ class BuildCppProject {
           }
         },
         projectDesc.usage);
-    fs::current_path(currentPath);
 
     for (auto& path : projectDesc.packages) {
       buildExportPackage(path);
@@ -105,8 +102,8 @@ class BuildCppProject {
       builder.dependOn(findBuiltPackage(path));
     }
 
-    buildCppBuilder.dependOn(builder.createExport(
-        projectPath, ctx.output / "packages" / projectDesc.name));
+    buildCppBuilder.dependOn(
+        builder.createExport(ctx.output / "packages" / projectDesc.name));
     exportPackageNames.emplace(projectDesc.name);
   }
 

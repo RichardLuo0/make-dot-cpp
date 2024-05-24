@@ -12,14 +12,16 @@ export class ObjBuilder : public Builder {
   }
 
   auto buildObjTargetList(const Context &ctx, ModuleMap &moduleMap) const {
-    const auto unitList = buildUnitList(ctx);
+    const auto inputInfo = buildInputInfo();
+    const auto unitList = buildUnitList(ctx, inputInfo);
+    const auto &base = inputInfo.second;
     std::deque<std::unique_ptr<Target>> objList;
     std::vector<std::pair<Ref<ObjTarget>, Ref<const Unit>>> targetList;
     targetList.reserve(unitList.size());
-    // Create ObjTarget;
+    // Create ObjTarget
     for (auto &unit : unitList) {
       std::unique_ptr<ObjTarget> obj;
-      const auto objPath = absoluteProximate(unit.input) += ".obj";
+      const auto objPath = fs::proximate(unit.input, base) += ".obj";
       if (unit.exported) {
         obj = std::make_unique<ObjTarget>(
             unit.input, unit.includeDeps, objPath, unit.moduleName,
