@@ -270,8 +270,6 @@ export class Builder {
   }
 
   virtual BuildResult build(const Context &ctx) const {
-    updateCacheFile(getCompileOptionsJson(ctx), compilerOptions.compileOptions);
-    updateCacheFile(getLinkOptionsJson(ctx), compilerOptions.linkOptions);
     const auto targetList = onBuild(ctx);
     const auto &target = targetList.getTarget();
     BuilderContext builderCtx{ctx, compiler, getCompilerOptions()};
