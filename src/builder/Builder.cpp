@@ -73,7 +73,7 @@ export class Builder {
   chainVarSet(std::shared_ptr<const Export>, exSet, dependOn, ex) {
     exSet.emplace(ex);
     coOpt.reset();
-    isExportLibListOutdated = true;
+    isExTargetListOutdated = true;
   }
 
  protected:
@@ -161,7 +161,8 @@ export class Builder {
     return dependOn(std::move(ex));
   }
 
-  chainMethod(dependOn, ranges::range<std::shared_ptr<Export>> auto, exs) {
+  chainMethod(dependOn, ranges::range<const std::shared_ptr<const Export>> auto,
+              exs) {
     for (auto &ex : exs) dependOn(ex);
   }
 
@@ -214,20 +215,20 @@ export class Builder {
   }
 
  private:
-  mutable bool isExportLibListOutdated = true;
-  mutable std::deque<Ref<const Target>> _libList;
+  mutable bool isExTargetListOutdated = true;
+  mutable std::deque<Ref<const Target>> _exTargetList;
 
  public:
-  auto buildExportLibList() const {
-    if (isExportLibListOutdated) {
-      _libList.clear();
+  auto buildExTargetList() const {
+    if (isExTargetListOutdated) {
+      _exTargetList.clear();
       for (auto &ex : exSet) {
-        const auto lib = ex->getLibrary();
-        if (lib.has_value()) _libList.emplace_back(lib.value());
+        const auto target = ex->getTarget();
+        if (target.has_value()) _exTargetList.emplace_back(target.value());
       }
-      isExportLibListOutdated = false;
+      isExTargetListOutdated = false;
     }
-    return _libList;
+    return _exTargetList;
   }
 
  private:

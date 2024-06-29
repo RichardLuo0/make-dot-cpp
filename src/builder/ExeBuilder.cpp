@@ -1,9 +1,3 @@
-#ifdef _WIN32
-#define POSTFIX ".exe"
-#else
-#define POSTFIX ""
-#endif
-
 export struct ExeTarget : public CachedTarget<>,
                           public Deps<>,
                           public FilesDeps {
@@ -33,10 +27,10 @@ export class ExeBuilder : public ObjBuilder {
 
  protected:
   TargetList onBuild(const Context &ctx) const override {
-    TargetList list(std::in_place_type<ExeTarget>, name + POSTFIX);
+    TargetList list(std::in_place_type<ExeTarget>, name + EXE_POSTFIX);
     auto &target = list.getTarget<ExeTarget>();
     target.dependOn(list.append(buildObjTargetList(ctx)));
-    target.dependOn(buildExportLibList());
+    target.dependOn(buildExTargetList());
     target.dependOn(getLinkOptionsJson(ctx));
     return list;
   }

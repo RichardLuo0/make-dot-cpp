@@ -1,14 +1,42 @@
-struct PackageJsonContext {
-  const Path& projectPath;
-  const Path& packagesPath;
+export struct Usage {
+ public:
+  virtual ~Usage() = default;
+
+  virtual void populateBuilder(Builder& builder,
+                               const Path& packagesPath) const = 0;
+
+  virtual std::unordered_set<Path> getPackages(
+      const Path& packagesPath) const = 0;
 };
 
-struct FmtString : public std::string {};
-struct FmtPath : public Path {
-  using Path::path;
+export struct CustomUsage : public Usage {
+ public:
+  std::unordered_set<PackagePath, PackagePath::Hash> packages;
+  std::variant<Path, std::vector<Path>> setupFile;
+
+  void populateBuilder(Builder& builder, const Path&) const override {
+    std::visit(
+        [&](auto&& setupFile) {
+          using T = std::decay_t<decltype(setupFile)>;
+          if constexpr (std::is_same_v<T, Path>)
+            builder.addSrc(setupFile);
+          else if constexpr (std::is_same_v<T, std::vector<Path>>) {
+            for (auto& singleFile : setupFile) builder.addSrc(singleFile);
+          }
+        },
+        setupFile);
+  }
+
+  std::unordered_set<Path> getPackages(
+      const Path& packagesPath) const override {
+    return packages | ranges::to<std::unordered_set<Path>>();
+  }
+
+ private:
+  BOOST_DESCRIBE_CLASS(CustomUsage, (), (packages, setupFile), (), ())
 };
 
-export struct Usage : public Export {
+export struct DefaultUsage : public Export, public Usage {
  protected:
   struct BuiltTarget : public ModuleTarget {
    private:
@@ -36,16 +64,18 @@ export struct Usage : public Export {
   };
 
  public:
-  std::optional<FmtPath> pcmPath;
-  FmtString compileOption;
-  FmtString linkOption;
+  std::optional<ProjectFmtPath> pcmPath;
+  ProjectFmtStr compileOption;
+  ProjectFmtStr linkOption;
   std::vector<std::string> libs;
 
-  static Usage create(const std::string& jsonStr) {
-    return json::value_to<Usage>(json::parse(jsonStr));
+  static DefaultUsage create(const std::string& jsonStr) {
+    return json::value_to<DefaultUsage>(json::parse(jsonStr));
   }
 
-  std::string toJson() { return json::serialize(json::value_from(*this)); }
+  std::string toJson() const {
+    return json::serialize(json::value_from(*this));
+  }
 
   std::string getCompileOption() const override {
     if (pcmPath.has_value())
@@ -84,23 +114,19 @@ export struct Usage : public Export {
     }
   };
 
+  void populateBuilder(Builder& builder,
+                       const Path& packagesPath) const override {
+    builder.addSrc(packagesPath / "makeDotCpp/template/package.cppm");
+    builder.define("\"USAGE=" + replace(toJson(), "\"", "\\\"") + '\"');
+  }
+
+  std::unordered_set<Path> getPackages(
+      const Path& packagesPath) const override {
+    return {packagesPath / "std", packagesPath / "makeDotCpp",
+            packagesPath / "boost"};
+  }
+
  private:
-  BOOST_DESCRIBE_CLASS(Usage, (), (pcmPath, compileOption, linkOption, libs),
-                       (), ())
+  BOOST_DESCRIBE_CLASS(DefaultUsage, (),
+                       (pcmPath, compileOption, linkOption, libs), (), ())
 };
-
-export FmtString tag_invoke(const json::value_to_tag<FmtString>&,
-                            const json::value& jv,
-                            const PackageJsonContext& ctx) {
-  const auto projectPathStr = ctx.projectPath.generic_string();
-  return FmtString(
-      std::vformat(jv.as_string(), std::make_format_args(projectPathStr)));
-}
-
-export FmtPath tag_invoke(const json::value_to_tag<FmtPath>&,
-                          const json::value& jv,
-                          const PackageJsonContext& ctx) {
-  const auto projectPathStr = ctx.projectPath.generic_string();
-  return FmtPath(
-      std::vformat(jv.as_string(), std::make_format_args(projectPathStr)));
-}

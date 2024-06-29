@@ -10,7 +10,7 @@ export struct Export {
     return std::nullopt;
   }
 
-  virtual std::optional<Ref<const Target>> getLibrary() const {
+  virtual std::optional<Ref<const Target>> getTarget() const {
     return std::nullopt;
   }
 };

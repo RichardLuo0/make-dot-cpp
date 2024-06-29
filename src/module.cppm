@@ -9,6 +9,7 @@ namespace makeDotCpp {
 export struct Context {
   std::string name = "Project";
   Path output = fs::weakly_canonical("build");
+  Path install;
   bool debug = false;
   Path relativePCMPath = "pcm";
   Path relativeObjPath = "obj";

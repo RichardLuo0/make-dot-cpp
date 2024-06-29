@@ -1,6 +1,10 @@
 export struct LibTarget : public CachedTarget<>, public Deps<> {
+ private:
+  bool isShared;
+
  public:
-  LibTarget(const Path &output) : CachedTarget(output) {}
+  LibTarget(const Path &output, bool isShared = false)
+      : CachedTarget(output), isShared(isShared) {}
 
   Path getOutput(BuilderContext &ctx) const override {
     return ctx.outputPath() / _output;
@@ -10,7 +14,8 @@ export struct LibTarget : public CachedTarget<>, public Deps<> {
     const auto [nodeList, objView] = Deps::buildNodeList(ctx);
     const Path output = getOutput(ctx);
     if (!objView.empty() && ctx.isNeedUpdate(output, objView)) {
-      return ctx.archive(objView, output, nodeList);
+      return isShared ? ctx.createSharedLib(objView, output, nodeList)
+                      : ctx.archive(objView, output, nodeList);
     }
     return std::nullopt;
   }
@@ -34,7 +39,7 @@ export class LibBuilder : public ObjBuilder {
                                    : std::make_optional(it->second);
     };
 
-    std::optional<Ref<const Target>> getLibrary() const override {
+    std::optional<Ref<const Target>> getTarget() const override {
       return targetList.getTarget();
     };
   };
@@ -71,7 +76,7 @@ export class LibBuilder : public ObjBuilder {
                  : std::nullopt;
     }
 
-    std::optional<Ref<const Target>> getLibrary() const override {
+    std::optional<Ref<const Target>> getTarget() const override {
       return target;
     };
   };
@@ -79,10 +84,11 @@ export class LibBuilder : public ObjBuilder {
   mutable std::shared_ptr<LibExport> ex;
 
   TargetList onBuild(const Context &ctx, ModuleMap &map) const {
-    TargetList list(std::in_place_type<LibTarget>, "lib" + name + ".a");
+    TargetList list(std::in_place_type<LibTarget>,
+                    "lib" + name + (isShared ? SHLIB_POSTFIX : ".a"), isShared);
     auto &target = list.getTarget<LibTarget>();
     target.dependOn(list.append(buildObjTargetList(ctx, map)));
-    target.dependOn(buildExportLibList());
+    target.dependOn(buildExTargetList());
     return list;
   }
 
@@ -91,8 +97,13 @@ export class LibBuilder : public ObjBuilder {
     return onBuild(ctx, map);
   }
 
+  chainVar(bool, isShared, false, setShared);
+
  public:
   using ObjBuilder::ObjBuilder;
+
+  LibBuilder(const std::string &name, bool isShared = false)
+      : ObjBuilder(name), isShared(isShared) {}
 
   std::shared_ptr<Export> getExport(const Context &ctx) const {
     if (ex == nullptr) ex = std::make_shared<LibExport>(*this, ctx);

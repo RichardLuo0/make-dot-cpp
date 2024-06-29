@@ -9,14 +9,15 @@ export class Project {
    public:
     OptionParser() {
       add_options()
-          .operator()("help,h", "display help message")
-          .operator()("build", "build the project")
-          .operator()("release", "build and release the project")
-          .operator()("clean", "clean the output directory")
+          .operator()("help,h", "display help message.")
+          .operator()("build", "build the project.")
+          .operator()("install", "build and install the project.")
+          .operator()("clean", "clean the output directory.")
           .operator()("output,o", po::value<Path>(),
-                      "output directory. Default to `build`")
-          .operator()("packages,p", po::value<Path>(), "packages directory")
-          .operator()("debug,g", "enable debug");
+                      "output directory. Default to `build`.")
+          .operator()("installPath,i", po::value<Path>(), "install directory.")
+          .operator()("packages,p", po::value<Path>(), "packages directory.")
+          .operator()("debug,g", "enable debug.");
     }
 
     void parse(int argc, const char **argv) {
@@ -40,16 +41,24 @@ export class Project {
   };
 
   using BuildFunc = std::function<void(const Context &)>;
-  using ReleaseFunc = std::function<void(const Context &)>;
+  using InstallFunc = std::function<void(const Context &)>;
 
  private:
   Context ctx;
 
-  chainVar(BuildFunc, buildFunc, nullptr, setBuild);
-  chainVar(ReleaseFunc, releaseFunc, nullptr, setRelease);
+  chainVar(BuildFunc, buildFunc, [](const Context &) {}, setBuild);
+  chainVar(
+      InstallFunc, installFunc,
+      [](const Context &) {
+        // TODO default install location
+      },
+      setInstall);
 
   chainMethod(setName, std::string, name) { ctx.name = name; }
   chainMethod(to, Path, path) { ctx.output = fs::weakly_canonical(path); }
+  chainMethod(installTo, Path, path) {
+    ctx.install = fs::weakly_canonical(path);
+  }
   chainMethod(setDebug, bool, debug) { ctx.debug = debug; }
   chainMethod(setThreadPoolSize, std::size_t, size) {
     ctx.threadPool.setSize(size);
@@ -69,9 +78,9 @@ export class Project {
     this->buildFunc(ctx);
   }
 
-  void release() {
+  void install() {
     ctx.threadPool.wait();
-    this->releaseFunc(ctx);
+    this->installFunc(ctx);
   }
 
   void watch() {
@@ -82,12 +91,16 @@ export class Project {
 
   void setUpWith(const OptionParser &op) {
 #define APPLY_IF_HAS(KEY, TYPE, FUNC) \
-  auto vv = op[KEY];                  \
-  if (!vv.empty()) {                  \
-    auto value = vv.as<TYPE>();       \
-    FUNC;                             \
+  {                                   \
+    auto vv = op[KEY];                \
+    if (!vv.empty()) {                \
+      auto value = vv.as<TYPE>();     \
+      FUNC;                           \
+    }                                 \
   }
+
     APPLY_IF_HAS("output", Path, to(value));
+    APPLY_IF_HAS("installPath", Path, installTo(value));
 #undef APPLY_IF_HAS
 
     if (op.contains("debug")) {
@@ -99,9 +112,9 @@ export class Project {
     setUpWith(op);
     if (op.contains("help")) {
       op.printDesc();
-    } else if (op.contains("release")) {
+    } else if (op.contains("install")) {
       build();
-      release();
+      install();
     } else if (op.contains("clean")) {
       clean();
     } else {

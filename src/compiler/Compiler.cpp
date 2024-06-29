@@ -25,13 +25,14 @@ export class Compiler {
       compile, (const Path &input, const Path &output, bool isDebug = false,
                 const std::unordered_map<std::string, Path> &moduleMap = {},
                 const std::string &extraOptions = ""));
-
   GENERATE_COMPILE_METHOD(link, (const std::vector<Path> &input,
                                  const Path &output, bool isDebug = false,
                                  const std::string &extraOptions = ""));
-
   GENERATE_COMPILE_METHOD(archive,
                           (const std::vector<Path> &input, const Path &output));
+  GENERATE_COMPILE_METHOD(createSharedLib,
+                          (const std::vector<Path> &input, const Path &output,
+                           const std::string &extraOptions = ""));
 #undef GENERATE_COMPILE_METHOD
 
   virtual std::deque<Path> getIncludeDeps(

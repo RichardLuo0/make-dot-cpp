@@ -123,6 +123,14 @@ export struct BuilderContext : public VFSContext {
                           "Archiving",
                           compiler->archive({objList.begin(), objList.end()},
                                             output));
+  GENERATE_COMPILE_METHOD(createSharedLib, (ranges::range<Path> auto &&objList),
+                          (compiler = this->compiler,
+                           objList = objList | ranges::to<std::vector<Path>>(),
+                           linkOptions = this->compilerOptions.linkOptions),
+                          "Archiving",
+                          compiler->createSharedLib({objList.begin(),
+                                                     objList.end()},
+                                                    output, linkOptions));
 #undef GENERATE_COMPILE_METHOD
 };
 

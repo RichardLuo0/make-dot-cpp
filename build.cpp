@@ -1,3 +1,9 @@
+#ifdef _WIN32
+#define POSTFIX ".exe"
+#else
+#define POSTFIX ""
+#endif
+
 import std;
 import makeDotCpp;
 import makeDotCpp.project;
@@ -6,6 +12,7 @@ import makeDotCpp.fileProvider;
 import makeDotCpp.builder;
 
 #include "project.json.hpp"
+#include "src/utils/alias.hpp"
 
 using namespace makeDotCpp;
 
@@ -21,7 +28,8 @@ int main(int argc, const char **argv) {
       .addOption("-I src/utils");
 
   LibBuilder libBuilder("makeDotCpp");
-  libBuilder.setCompiler(compiler).addSrc(Glob("src/**/module.cppm"));
+  libBuilder.setShared(true).setCompiler(compiler).addSrc(
+      Glob("src/**/module.cppm"));
 
   ExeBuilder builder("make.cpp");
   builder.setCompiler(compiler).addSrc("src/main.cpp");
@@ -33,7 +41,6 @@ int main(int argc, const char **argv) {
 
   Project()
       .setName("make-dot-cpp")
-      .setDebug(false)
       .setBuild([&](const Context &ctx) {
         builder.dependOn(libBuilder.getExport(ctx));
 
@@ -47,7 +54,39 @@ int main(int argc, const char **argv) {
           throw e;
         }
       })
-      .setRelease([](const Context &) {})
+      .setInstall([](const Context &ctx) {
+        if (ctx.install.empty()) {
+          std::cerr << "Install path is not set" << std::endl;
+          return;
+        }
+
+        {
+          const Path binPath = ctx.install / "bin";
+          fs::create_directory(binPath);
+          fs::copy(ctx.output / (std::string("make.cpp") + POSTFIX), binPath,
+                   fs::copy_options::update_existing);
+          fs::copy(ctx.output / "libmakeDotCpp.dll", binPath,
+                   fs::copy_options::update_existing);
+        }
+
+        {
+          const Path libPath = ctx.install / "lib";
+          fs::create_directory(libPath);
+          for (const auto &pcmFile : fs::directory_iterator(ctx.pcmPath()))
+            fs::copy(pcmFile, libPath, fs::copy_options::update_existing);
+        }
+
+        {
+          fs::copy(
+              "template", ctx.install / "template",
+              fs::copy_options::update_existing | fs::copy_options::recursive);
+        }
+
+        {
+          fs::copy("project.json", ctx.install,
+                   fs::copy_options::update_existing);
+        }
+      })
       .to("build-make-dot-cpp")
       .run(op);
   return 0;

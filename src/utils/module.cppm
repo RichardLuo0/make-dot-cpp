@@ -42,7 +42,8 @@ struct to {};
 export template <class C>
 inline C operator|(std::ranges::range auto&& range, to<C> to) {
   C result;
-  std::ranges::copy(range.begin(), range.end(), std::back_inserter(result));
+  std::ranges::copy(range.begin(), range.end(),
+                    std::inserter(result, result.end()));
   return result;
 }
 

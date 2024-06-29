@@ -88,6 +88,19 @@ export class Clang : public Compiler {
     return std::format("{0} r {2} {1}", Process::findExecutable("ar"), objList,
                        output.generic_string());
   }
+
+  GENERATE_COMPILE_METHOD(createSharedLib,
+                          (const std::vector<Path> &input, const Path &output,
+                           const std::string &extraOptions = ""),
+                          (input, output, extraOptions)) {
+    std::string objList;
+    for (auto &obj : input) {
+      objList += obj.generic_string() + ' ';
+    }
+    return std::format("{} -shared -Wl,-export-all-symbols {} {} {} -o {}",
+                       Process::findExecutable("clang++"), linkOptions,
+                       extraOptions, objList, output.generic_string());
+  }
 #undef GENERATE_COMPILE_METHOD
 
   std::deque<Path> getIncludeDeps(

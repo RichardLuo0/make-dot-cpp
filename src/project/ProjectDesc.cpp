@@ -1,17 +1,10 @@
-export struct PackagePath : public Path {
-  using Hash = std::hash<Path>;
-};
-
-export defException(PackageNotBuilt, (const std::string& name),
-                    name + " is not built");
-
 export struct ProjectDesc {
  public:
   std::string name;
   std::unordered_set<PackagePath, PackagePath::Hash> packages;
 
   struct Dev {
-    Path buildFile = "build.cpp";
+    std::variant<Path, std::vector<Path>> buildFile = "build.cpp";
     std::string compiler = "clang++";
     bool debug = false;
     std::unordered_set<PackagePath, PackagePath::Hash> packages;
@@ -22,7 +15,7 @@ export struct ProjectDesc {
   };
   Merge<Dev> dev;
 
-  std::variant<std::shared_ptr<Merge<Usage>>, Path, std::vector<Path>> usage;
+  std::shared_ptr<Usage> usage;
 
   static ProjectDesc create(const Path& path, const Path& packagesPath) {
     const auto projectJsonPath =
@@ -32,34 +25,17 @@ export struct ProjectDesc {
         PackageJsonContext{projectJsonPath.parent_path(), packagesPath});
   }
 
-  std::shared_ptr<Export> getExport() {
-    if (std::holds_alternative<Path>(usage)) throw PackageNotBuilt(name);
-    return std::get<0>(usage);
-  }
-
  private:
   BOOST_DESCRIBE_CLASS(ProjectDesc, (), (name, packages, dev, usage), (), ())
 };
 
-struct PackageLoc {
- public:
-  Path path;
-
- private:
-  BOOST_DESCRIBE_CLASS(PackageLoc, (), (path), (), ())
-};
-
-export PackagePath tag_invoke(const json::value_to_tag<PackagePath>&,
-                              const json::value& jv,
-                              const PackageJsonContext& ctx) {
-  auto loc = json::value_to<std::variant<std::string, PackageLoc>>(jv);
-  return PackagePath(fs::weakly_canonical(std::visit(
-      [&](auto&& loc) {
-        using T = std::decay_t<decltype(loc)>;
-        if constexpr (std::is_same_v<T, std::string>)
-          return ctx.packagesPath / loc;
-        else
-          return loc.path;
-      },
-      loc)));
+export std::shared_ptr<Usage> tag_invoke(
+    const json::value_to_tag<std::shared_ptr<Usage>>&, const json::value& jv,
+    const PackageJsonContext& ctx) {
+  const auto* typePtr = jv.as_object().if_contains("type");
+  const auto type = typePtr ? (*typePtr).as_string() : "";
+  if (type == "custom")
+    return json::value_to<std::shared_ptr<CustomUsage>>(jv, ctx);
+  else
+    return json::value_to<std::shared_ptr<Merge<DefaultUsage>>>(jv, ctx);
 }

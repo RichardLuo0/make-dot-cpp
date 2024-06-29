@@ -13,5 +13,9 @@
       "std",
       "makeDotCpp"
     ]
+  },
+  "usage": {
+    "pcmPath": "{0}/lib",
+    "linkOption": "{0}/bin/libmakeDotCpp.dll"
   }
 }
