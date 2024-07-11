@@ -1,6 +1,9 @@
 export struct Export {
   virtual ~Export() = default;
 
+  // This is used for user build file to change behaviours in export.
+  virtual void set(const std::string& key, const std::string& value) {}
+
   virtual std::string getCompileOption() const { return std::string(); }
 
   virtual std::string getLinkOption() const { return std::string(); }

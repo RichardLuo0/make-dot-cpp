@@ -16,6 +16,10 @@
   },
   "usage": {
     "pcmPath": "{0}/lib",
-    "linkOption": "{0}/bin/libmakeDotCpp.dll"
+    "linkOption": "{0}/bin/libmakeDotCpp.dll",
+    "packages": [
+      "std",
+      "boost"
+    ]
   }
 }

@@ -1,15 +1,17 @@
 module;
-#include <boost/json.hpp>
 #include <boost/describe.hpp>
-#include <boost/program_options.hpp>
 
 export module makeDotCpp.project;
 
 import std;
 import makeDotCpp;
+import makeDotCpp.compiler;
 import makeDotCpp.builder;
 import makeDotCpp.thread;
 import makeDotCpp.utils;
+import boost.json;
+import boost.program_options;
+import boost.dll;
 
 #include "alias.hpp"
 #include "macro.hpp"

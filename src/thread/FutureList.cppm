@@ -1,3 +1,8 @@
+export module makeDotCpp.thread:FutureList;
+import std;
+import :ThreadPool;
+
+namespace makeDotCpp {
 export class FutureList : public std::vector<std::future<ThreadPool::RetType>> {
  public:
   void wait() {
@@ -18,3 +23,4 @@ export class FutureList : public std::vector<std::future<ThreadPool::RetType>> {
     return resultList;
   }
 };
+}  // namespace makeDotCpp

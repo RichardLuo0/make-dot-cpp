@@ -1,20 +1,36 @@
+export using PackageExports =
+    std::unordered_map<std::string, std::shared_ptr<Export>>;
+export using ExportSet = std::unordered_set<std::shared_ptr<Export>>;
+
 export struct Usage {
  public:
   virtual ~Usage() = default;
 
-  virtual void populateBuilder(Builder& builder,
-                               const Path& packagesPath) const = 0;
+  // This is used if Usage does not inherit from Export.
+  virtual std::shared_ptr<Export> getExport(
+      const Context& ctx, const std::string& name,
+      const std::shared_ptr<Compiler>& compiler,
+      std::function<const ExportSet&(const Path&)> findBuiltPackage) const {
+    return nullptr;
+  };
 
-  virtual std::unordered_set<Path> getPackages(
-      const Path& packagesPath) const = 0;
+  virtual const std::unordered_set<PackagePath, PackagePath::Hash>&
+  getPackages() const = 0;
 };
 
 export struct CustomUsage : public Usage {
  public:
+  std::unordered_set<PackagePath, PackagePath::Hash> devPackages;
   std::unordered_set<PackagePath, PackagePath::Hash> packages;
   std::variant<Path, std::vector<Path>> setupFile;
 
-  void populateBuilder(Builder& builder, const Path&) const override {
+  std::shared_ptr<Export> getExport(const Context& ctx, const std::string& name,
+                                    const std::shared_ptr<Compiler>& compiler,
+                                    std::function<const ExportSet&(const Path&)>
+                                        findBuiltPackage) const override {
+    LibBuilder builder(name + "_export");
+    builder.setShared(true).setCompiler(compiler).define("NO_MAIN").define(
+        "PROJECT_NAME=" + name);
     std::visit(
         [&](auto&& setupFile) {
           using T = std::decay_t<decltype(setupFile)>;
@@ -25,15 +41,25 @@ export struct CustomUsage : public Usage {
           }
         },
         setupFile);
+    for (auto& path : devPackages) {
+      builder.dependOn(findBuiltPackage(path));
+    }
+    Context pCtx{name, ctx.output / "packages" / name};
+    auto result = builder.build(pCtx);
+    result.get();
+    boost::dll::shared_library lib(builder.getOutput(pCtx).generic_string());
+    auto getExport = lib.get<std::shared_ptr<Export>()>("getExport");
+    return getExport();
   }
 
-  std::unordered_set<Path> getPackages(
-      const Path& packagesPath) const override {
-    return packages | ranges::to<std::unordered_set<Path>>();
+  const std::unordered_set<PackagePath, PackagePath::Hash>& getPackages()
+      const override {
+    return packages;
   }
 
  private:
-  BOOST_DESCRIBE_CLASS(CustomUsage, (), (packages, setupFile), (), ())
+  BOOST_DESCRIBE_CLASS(CustomUsage, (), (devPackages, packages, setupFile), (),
+                       ())
 };
 
 export struct DefaultUsage : public Export, public Usage {
@@ -68,14 +94,7 @@ export struct DefaultUsage : public Export, public Usage {
   ProjectFmtStr compileOption;
   ProjectFmtStr linkOption;
   std::vector<std::string> libs;
-
-  static DefaultUsage create(const std::string& jsonStr) {
-    return json::value_to<DefaultUsage>(json::parse(jsonStr));
-  }
-
-  std::string toJson() const {
-    return json::serialize(json::value_from(*this));
-  }
+  std::unordered_set<PackagePath, PackagePath::Hash> packages;
 
   std::string getCompileOption() const override {
     if (pcmPath.has_value())
@@ -114,19 +133,13 @@ export struct DefaultUsage : public Export, public Usage {
     }
   };
 
-  void populateBuilder(Builder& builder,
-                       const Path& packagesPath) const override {
-    builder.addSrc(packagesPath / "makeDotCpp/template/package.cppm");
-    builder.define("\"USAGE=" + replace(toJson(), "\"", "\\\"") + '\"');
-  }
-
-  std::unordered_set<Path> getPackages(
-      const Path& packagesPath) const override {
-    return {packagesPath / "std", packagesPath / "makeDotCpp",
-            packagesPath / "boost"};
+  const std::unordered_set<PackagePath, PackagePath::Hash>& getPackages()
+      const override {
+    return packages;
   }
 
  private:
   BOOST_DESCRIBE_CLASS(DefaultUsage, (),
-                       (pcmPath, compileOption, linkOption, libs), (), ())
+                       (pcmPath, compileOption, linkOption, libs, packages), (),
+                       ())
 };

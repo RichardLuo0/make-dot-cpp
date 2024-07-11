@@ -1,4 +1,4 @@
-import Print;
+import print;
 
 int main(int, const char**) {
   print();

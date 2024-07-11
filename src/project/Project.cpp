@@ -2,13 +2,14 @@ namespace po = boost::program_options;
 
 export class Project {
  public:
-  struct OptionParser : public boost::program_options::options_description {
+  struct OptionParser {
    private:
+    boost::program_options::options_description od;
     po::variables_map vm;
 
    public:
     OptionParser() {
-      add_options()
+      od.add_options()
           .operator()("help,h", "display help message.")
           .operator()("build", "build the project.")
           .operator()("install", "build and install the project.")
@@ -20,8 +21,12 @@ export class Project {
           .operator()("debug,g", "enable debug.");
     }
 
+    void add(const std::string &name, const std::string &desc) {
+      od.add_options()(name.c_str(), desc.c_str());
+    }
+
     void parse(int argc, const char **argv) {
-      po::store(po::parse_command_line(argc, argv, *this), vm);
+      po::store(po::parse_command_line(argc, argv, od), vm);
       po::notify(vm);
     }
 
@@ -31,7 +36,7 @@ export class Project {
                         : vv.as<Path>();
     }
 
-    void printDesc() const { std::cout << *this << std::endl; }
+    void printHelp() const { std::cout << od << std::endl; }
 
     const po::variable_value &operator[](const std::string &key) const {
       return vm[key];
@@ -74,7 +79,7 @@ export class Project {
   ~Project() { ctx.threadPool.wait(); }
 
   void build() {
-    ensureOutputExists();
+    ensureDirExists(ctx.output);
     this->buildFunc(ctx);
   }
 
@@ -111,7 +116,7 @@ export class Project {
   void run(const OptionParser &op) {
     setUpWith(op);
     if (op.contains("help")) {
-      op.printDesc();
+      op.printHelp();
     } else if (op.contains("install")) {
       build();
       install();
@@ -122,6 +127,22 @@ export class Project {
     }
   }
 
- private:
-  void ensureOutputExists() { fs::create_directories(ctx.output); }
+  void run(int argc, const char **argv) {
+    Project::OptionParser op;
+    op.parse(argc, argv);
+    return run(op);
+  }
+
+  static void ensureDirExists(const Path &path) {
+    fs::create_directories(path);
+  }
+
+  static void updateFile(const Path &from, const Path &to) {
+    fs::copy(from, to, fs::copy_options::update_existing);
+  }
+
+  static void updateAllFiles(const Path &from, const Path &to) {
+    fs::copy(from, to,
+             fs::copy_options::update_existing | fs::copy_options::recursive);
+  }
 };

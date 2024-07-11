@@ -1,4 +1,14 @@
-namespace Process {
+module;
+#include <boost/process.hpp>
+
+export module makeDotCpp.thread.process;
+import std;
+
+#include "alias.hpp"
+#include "macro.hpp"
+
+namespace makeDotCpp {
+namespace process {
 export defException(ProcessError, (const std::error_code &ec),
                     "process error: " + ec.message());
 
@@ -44,4 +54,5 @@ export int runNoRedirect(const std::string &command) {
   if (ec) throw ProcessError(ec);
   return status;
 }
-}  // namespace Process
+}  // namespace process
+}  // namespace makeDotCpp

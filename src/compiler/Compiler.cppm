@@ -1,6 +1,11 @@
-using Path = Path;
+export module makeDotCpp.compiler;
+import std;
+import makeDotCpp.thread.process;
 
-struct ModuleInfo {
+#include "alias.hpp"
+
+namespace makeDotCpp {
+export struct ModuleInfo {
   bool exported = false;
   std::string name;
   std::deque<std::string> deps;
@@ -14,7 +19,7 @@ export class Compiler {
   virtual Compiler &addLinkOption(std::string option) = 0;
 
 #define GENERATE_COMPILE_METHOD(NAME, ARGS)    \
-  virtual Process::Result NAME ARGS const = 0; \
+  virtual process::Result NAME ARGS const = 0; \
   virtual std::string NAME##Command ARGS const = 0;
 
   GENERATE_COMPILE_METHOD(
@@ -46,3 +51,4 @@ export class Compiler {
     fs::create_directories(path.parent_path());
   }
 };
+}  // namespace makeDotCpp

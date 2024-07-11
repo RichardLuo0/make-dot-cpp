@@ -10,13 +10,6 @@ export struct Target {
 
 export template <class T = Target>
 struct CachedTarget : public T {
- protected:
-  // Relative path
-  const Path _output;
-
- public:
-  CachedTarget(const Path &output) : _output(output) {}
-
  private:
   mutable bool isBuilt = false;
   mutable std::optional<Ref<Node>> node;
@@ -159,16 +152,17 @@ export struct PCMTarget : public UnitDeps, public CachedTarget<ModuleTarget> {
  private:
   const std::string name;
   const Path input;
+  const Path output;
 
  public:
   PCMTarget(const std::string &name, const Path &input, const Path &output,
             const std::deque<Path> &includeDeps)
-      : UnitDeps(includeDeps), CachedTarget(output), name(name), input(input) {}
+      : UnitDeps(includeDeps), name(name), input(input), output(output) {}
 
   const std::string &getName() const override { return name; }
 
   Path getOutput(BuilderContext &ctx) const override {
-    return ctx.pcmPath() / _output;
+    return ctx.pcmPath() / output;
   };
 
   std::unordered_map<std::string, Path> getModuleMap(
@@ -216,20 +210,21 @@ export struct ObjTarget : public CachedTarget<> {
   };
 
   std::variant<IsModule, NotModule> internal;
+  const Path output;
 
  public:
   ObjTarget(const Path &input, const std::deque<Path> &includeDeps,
             const Path &output, const std::string &name, const Path &pcm)
-      : CachedTarget(output),
-        internal(std::in_place_type<IsModule>, name, input, pcm, includeDeps) {}
+      : internal(std::in_place_type<IsModule>, name, input, pcm, includeDeps),
+        output(output) {}
 
   ObjTarget(const Path &input, const std::deque<Path> &includeDeps,
             const Path &output)
-      : CachedTarget(output),
-        internal(std::in_place_type<NotModule>, input, *this, includeDeps) {}
+      : internal(std::in_place_type<NotModule>, input, *this, includeDeps),
+        output(output) {}
 
   Path getOutput(BuilderContext &ctx) const override {
-    return ctx.objPath() / _output;
+    return ctx.objPath() / output;
   };
 
   const PCMTarget &getPCM() { return std::get<IsModule>(internal); }

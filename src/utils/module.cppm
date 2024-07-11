@@ -1,11 +1,11 @@
 module;
-#include <boost/json.hpp>
 #include <boost/describe.hpp>
 #include <boost/algorithm/string.hpp>
 
 export module makeDotCpp.utils;
 
 import std;
+import boost.json;
 
 #include "alias.hpp"
 
@@ -121,6 +121,12 @@ export template <class T, class Ctx>
 std::shared_ptr<T> tag_invoke(const json::value_to_tag<std::shared_ptr<T>>&,
                               const json::value& jv, const Ctx& ctx) {
   return std::make_shared<T>(json::value_to<T>(jv, ctx));
+}
+
+export template <class T, class Ctx>
+std::unique_ptr<T> tag_invoke(const json::value_to_tag<std::unique_ptr<T>>&,
+                              const json::value& jv, const Ctx& ctx) {
+  return std::make_unique<T>(json::value_to<T>(jv, ctx));
 }
 
 export template <class T>

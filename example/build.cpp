@@ -1,18 +1,14 @@
 import std;
 import makeDotCpp;
 import makeDotCpp.project;
-import makeDotCpp.compiler;
-import makeDotCpp.fileProvider;
+import makeDotCpp.compiler.Clang;
+import makeDotCpp.fileProvider.Glob;
 import makeDotCpp.builder;
-
-#include "project.json.hpp"
 
 using namespace makeDotCpp;
 
-int main(int argc, const char **argv) {
-  std::deque<std::shared_ptr<Export>> packages;
-  populatePackages(packages);
-
+extern "C" int build(const PackageExports &packageExports, int argc,
+                     const char **argv) {
   Project::OptionParser op;
   op.parse(argc, argv);
 
@@ -20,11 +16,9 @@ int main(int argc, const char **argv) {
   clang.addOption("-march=native -std=c++20");
 
   ExeBuilder builder("example");
-  builder.setCompiler(clang).addSrc(Glob("src/**/*.cpp*"));
-
-  for (auto &package : packages) {
-    builder.dependOn(package);
-  }
+  builder.setCompiler(clang)
+      .addSrc(Glob("src/**/*.cpp*"))
+      .dependOn(packageExports | std::views::values);
 
   Project()
       .setName("Example")

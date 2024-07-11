@@ -1,6 +1,5 @@
 module;
 #include <boost/describe.hpp>
-#include <boost/json.hpp>
 
 export module makeDotCpp.builder;
 
@@ -9,7 +8,10 @@ import makeDotCpp;
 import makeDotCpp.compiler;
 import makeDotCpp.fileProvider;
 import makeDotCpp.thread;
+import makeDotCpp.thread.process;
+import makeDotCpp.thread.logger;
 import makeDotCpp.utils;
+import boost.json;
 
 #include "alias.hpp"
 #include "macro.hpp"

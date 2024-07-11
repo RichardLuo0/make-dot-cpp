@@ -1,4 +1,4 @@
-export module Print;
+export module print;
 
 import std;
 

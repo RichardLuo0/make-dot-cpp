@@ -1,3 +1,13 @@
+export module makeDotCpp.compiler.Clang;
+import std;
+import makeDotCpp.compiler;
+import makeDotCpp.thread.process;
+import boost.json;
+
+#include "alias.hpp"
+#include "macro.hpp"
+
+namespace makeDotCpp {
 export class Clang : public Compiler {
  public:
   defException(ScanDepsError, (const Path &input),
@@ -30,9 +40,9 @@ export class Clang : public Compiler {
   };
 
 #define GENERATE_COMPILE_METHOD(NAME, ARGS, PASS_ARGS) \
-  Process::Result NAME ARGS const override {           \
+  process::Result NAME ARGS const override {           \
     this->ensureParentExists(output);                  \
-    return Process::run(NAME##Command PASS_ARGS);      \
+    return process::run(NAME##Command PASS_ARGS);      \
   }                                                    \
   std::string NAME##Command ARGS const override
 
@@ -45,7 +55,7 @@ export class Clang : public Compiler {
     return std::format(
         "{} -fansi-escape-codes -fcolor-diagnostics "
         "-std=c++20 --precompile -c {} {} {} {} -o {}",
-        Process::findExecutable("clang++"), compileOptions,
+        process::findExecutable("clang++"), compileOptions,
         getModuleMapStr(moduleMap), extraOptions, input.generic_string(),
         output.generic_string());
   }
@@ -58,7 +68,7 @@ export class Clang : public Compiler {
       (input, output, isDebug, moduleMap, extraOptions)) {
     return std::format(
         "{} -fansi-escape-codes -fcolor-diagnostics -c {} {} {} {} {} -o {}",
-        Process::findExecutable("clang++"), (isDebug ? "-g" : ""),
+        process::findExecutable("clang++"), (isDebug ? "-g" : ""),
         compileOptions, getModuleMapStr(moduleMap), extraOptions,
         input.generic_string(), output.generic_string());
   }
@@ -74,7 +84,7 @@ export class Clang : public Compiler {
     }
     return std::format(
         "{} -fansi-escape-codes -fcolor-diagnostics {} {} {} {} -o {}",
-        Process::findExecutable("clang++"), (isDebug ? "-g" : ""), linkOptions,
+        process::findExecutable("clang++"), (isDebug ? "-g" : ""), linkOptions,
         extraOptions, objList, output.generic_string());
   }
 
@@ -85,7 +95,7 @@ export class Clang : public Compiler {
     for (auto &obj : input) {
       objList += obj.generic_string() + ' ';
     }
-    return std::format("{0} r {2} {1}", Process::findExecutable("ar"), objList,
+    return std::format("{0} r {2} {1}", process::findExecutable("ar"), objList,
                        output.generic_string());
   }
 
@@ -98,15 +108,15 @@ export class Clang : public Compiler {
       objList += obj.generic_string() + ' ';
     }
     return std::format("{} -shared -Wl,-export-all-symbols {} {} {} -o {}",
-                       Process::findExecutable("clang++"), linkOptions,
+                       process::findExecutable("clang++"), linkOptions,
                        extraOptions, objList, output.generic_string());
   }
 #undef GENERATE_COMPILE_METHOD
 
   std::deque<Path> getIncludeDeps(
       const Path &input, const std::string &extraOptions = "") const override {
-    const auto result = Process::run(
-        std::format("{} {} {} -MM {}", Process::findExecutable("clang++"),
+    const auto result = process::run(
+        std::format("{} {} {} -MM {}", process::findExecutable("clang++"),
                     compileOptions, extraOptions, input.generic_string()));
     if (result.status != 0) throw ScanDepsError(input);
     const auto &output = result.output;
@@ -142,8 +152,8 @@ export class Clang : public Compiler {
   ModuleInfo getModuleInfo(
       const Path &input, const std::string &extraOptions = "") const override {
     ModuleInfo info;
-    const auto result = Process::run(
-        Process::findExecutable("clang-scan-deps") + " -format=p1689 -- " +
+    const auto result = process::run(
+        process::findExecutable("clang-scan-deps") + " -format=p1689 -- " +
         compileCommand(input, "test", false, {}, extraOptions));
     if (result.status != 0) throw ScanDepsError(input);
     const json::object rule = json::parse(result.output)
@@ -173,3 +183,4 @@ export class Clang : public Compiler {
     return info;
   }
 };
+}  // namespace makeDotCpp

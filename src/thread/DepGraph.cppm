@@ -1,3 +1,10 @@
+export module makeDotCpp.thread:DepGraph;
+import std;
+import :ThreadPool;
+
+#include "alias.hpp"
+
+namespace makeDotCpp {
 template <class T>
 class QuickRemoveList : public std::list<T> {
  private:
@@ -72,7 +79,7 @@ export class DepGraph {
         try {
           threadPool.post(std::move(task), newThreadHint);
           state = Running;
-        } catch (const ThreadPool::IsTerminatedError& e) {
+        } catch (const ThreadPool::IsTerminated& e) {
         }
       }
     }
@@ -122,3 +129,4 @@ export class DepGraph {
     this->threadPool = nullptr;
   }
 };
+}  // namespace makeDotCpp

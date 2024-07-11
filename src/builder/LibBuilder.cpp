@@ -1,13 +1,19 @@
 export struct LibTarget : public CachedTarget<>, public Deps<> {
  private:
-  bool isShared;
+  const std::string name;
+  const bool isShared;
 
  public:
-  LibTarget(const Path &output, bool isShared = false)
-      : CachedTarget(output), isShared(isShared) {}
+  LibTarget(const std::string &name, bool isShared = false)
+      : name(name), isShared(isShared) {}
+
+  static Path getOutput(const Context &ctx, const std::string &name,
+                        bool isShared) {
+    return ctx.output / ("lib" + name + (isShared ? SHLIB_POSTFIX : ".a"));
+  }
 
   Path getOutput(BuilderContext &ctx) const override {
-    return ctx.outputPath() / _output;
+    return LibTarget::getOutput(ctx.ctx, name, isShared);
   }
 
   std::optional<Ref<Node>> onBuild(BuilderContext &ctx) const override {
@@ -84,8 +90,7 @@ export class LibBuilder : public ObjBuilder {
   mutable std::shared_ptr<LibExport> ex;
 
   TargetList onBuild(const Context &ctx, ModuleMap &map) const {
-    TargetList list(std::in_place_type<LibTarget>,
-                    "lib" + name + (isShared ? SHLIB_POSTFIX : ".a"), isShared);
+    TargetList list(std::in_place_type<LibTarget>, name, isShared);
     auto &target = list.getTarget<LibTarget>();
     target.dependOn(list.append(buildObjTargetList(ctx, map)));
     target.dependOn(buildExTargetList());
@@ -105,14 +110,17 @@ export class LibBuilder : public ObjBuilder {
   LibBuilder(const std::string &name, bool isShared = false)
       : ObjBuilder(name), isShared(isShared) {}
 
+  Path getOutput(const Context &ctx) const override {
+    return LibTarget::getOutput(ctx, name, isShared);
+  }
+
   std::shared_ptr<Export> getExport(const Context &ctx) const {
     if (ex == nullptr) ex = std::make_shared<LibExport>(*this, ctx);
     return ex;
   }
 
   std::shared_ptr<Export> createExport(const Path &outputPath) const {
-    auto ex =
-        std::make_shared<ExternalLibExport>(*this, Context{name, outputPath});
-    return ex;
+    return std::make_shared<ExternalLibExport>(*this,
+                                               Context{name, outputPath});
   }
 };

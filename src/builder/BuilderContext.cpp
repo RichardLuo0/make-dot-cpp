@@ -67,10 +67,10 @@ export struct BuilderContext : public VFSContext {
 
   FutureList &&takeFutureList() { return std::move(futureList); }
 
-  static int handleResult(const Process::Result &&result, DepGraph &graph) {
-    Logger::info(result.command);
-    if (!result.output.empty()) Logger::info(result.output);
-    Logger::flush();
+  static int handleResult(const process::Result &&result, DepGraph &graph) {
+    logger::info(result.command);
+    if (!result.output.empty()) logger::info(result.output);
+    logger::flush();
     if (result.status != 0) {
       graph.terminate();
       throw CompileError();
@@ -86,9 +86,9 @@ export struct BuilderContext : public VFSContext {
     addFile(output);                                                        \
     return collect(ctx.depGraph.addNode(                                    \
         [=, id = id++, UNPACK CAPTURE](DepGraph &graph) {                   \
-          Logger::info(std::format("\033[0;34m[{}] " LOGNAME ": {}\033[0m", \
+          logger::info(std::format("\033[0;34m[{}] " LOGNAME ": {}\033[0m", \
                                    id, output.generic_string()));           \
-          Logger::flush();                                                  \
+          logger::flush();                                                  \
           return handleResult(FUNC, graph);                                 \
         },                                                                  \
         deps));                                                             \

@@ -1,6 +1,13 @@
+export module makeDotCpp.thread:ThreadPool;
+import std;
+
+#include "alias.hpp"
+#include "macro.hpp"
+
+namespace makeDotCpp {
 export class ThreadPool {
  public:
-  defException(IsTerminatedError, (const std::string& when),
+  defException(IsTerminated, (const std::string& when),
                "thread pool is terminating when " + when);
 
   using RetType = std::any;
@@ -12,7 +19,7 @@ export class ThreadPool {
 
  private:
   std::vector<std::thread> threadList;
-  size_t freeThread = 0;
+  std::size_t freeThread = 0;
   std::queue<Task> taskQueue;
   bool isTerminated = false;
   std::mutex mutex;
@@ -33,7 +40,7 @@ export class ThreadPool {
 
   void post(Task&& task, bool newThreadHint = true) {
     std::lock_guard lock(mutex);
-    if (isTerminated) throw IsTerminatedError("posting new task");
+    if (isTerminated) throw IsTerminated("posting new task");
     taskQueue.push(std::move(task));
     if (threadList.size() < threadNum && freeThread < 1 &&
         (newThreadHint || threadList.size() == 0)) {
@@ -86,3 +93,4 @@ export class ThreadPool {
     }
   }
 };
+}  // namespace makeDotCpp

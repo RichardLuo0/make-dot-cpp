@@ -11,21 +11,6 @@ export struct Unit {
                        (), ())
 };
 
-struct BuilderState {
-  Path compileOptionsJson, linkOptionsJson;
-  std::unordered_set<Path> inputSet;
-  std::vector<Unit> unitList;
-};
-
-export struct BuildResult {
-  Path output;
-  mutable FutureList futureList;
-
-  void wait() const { return futureList.wait(); }
-
-  auto get() const { return futureList.get(); }
-};
-
 export class Builder {
  protected:
   friend struct BuilderContext;
@@ -37,9 +22,8 @@ export class Builder {
 
    public:
     template <class T>
-    TargetList(std::in_place_type_t<T>, auto &&...args) {
-      target = std::make_unique<T>(std::forward<decltype(args)>(args)...);
-    }
+    TargetList(std::in_place_type_t<T>, auto &&...args)
+        : target(std::make_unique<T>(std::forward<decltype(args)>(args)...)) {}
 
     auto append(ranges::range<std::unique_ptr<Target>> auto &&anotherList) {
       std::vector<Ref<const Target>> targetRefList;
@@ -55,8 +39,8 @@ export class Builder {
     const Target &at(std::size_t i) const { return *list.at(i); }
 
     template <class T = Target>
-    auto &getTarget() const {
-      return static_cast<T &>(*target);
+    T &getTarget() const {
+      return *static_cast<T *>(target.get());
     }
   };
 
@@ -269,12 +253,16 @@ export class Builder {
     os << compileCommands;
   }
 
-  virtual BuildResult build(const Context &ctx) const {
+  // Do not call build() on same ctx sequentially.
+  // This will cause race condition.
+  virtual FutureList build(const Context &ctx) const {
     const auto targetList = onBuild(ctx);
     const auto &target = targetList.getTarget();
     BuilderContext builderCtx{ctx, compiler, getCompilerOptions()};
     target.build(builderCtx);
     ctx.run();
-    return {target.getOutput(builderCtx), builderCtx.takeFutureList()};
+    return builderCtx.takeFutureList();
   };
+
+  virtual Path getOutput(const Context &ctx) const = 0;
 };

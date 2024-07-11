@@ -2,6 +2,6 @@
   "name": "glob",
   "usage": {
     "compileOption": "-I {0}/glob/include",
-    "linkOption": "{0}/../build/packages/glob/libglob.a"
+    "linkOption": "{0}/../build-cmake/packages/glob/libglob.a"
   }
 }
