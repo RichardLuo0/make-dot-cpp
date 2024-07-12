@@ -48,9 +48,6 @@ export class Builder {
   std::string name = "builder";
 
  protected:
-  chainVar(std::shared_ptr<const Compiler>, compiler, setCompiler);
-
- protected:
   chainVarSet(Path, srcSet, addSrc, src) { srcSet.emplace(src); };
 
  protected:
@@ -125,13 +122,6 @@ export class Builder {
   Builder(const std::string &name) : name(name) {}
   virtual ~Builder() = default;
 
-  template <class C>
-    requires std::is_base_of_v<Compiler, C>
-  inline auto &setCompiler(const C &compiler) {
-    this->compiler = std::make_shared<const C>(compiler);
-    return *this;
-  }
-
   template <class E, class... Args>
     requires std::is_base_of_v<Export, E>
   inline auto &dependOn(Args &&...args) {
@@ -180,10 +170,10 @@ export class Builder {
         unitList.emplace_back(json::value_to<Unit>(depJson));
       } else {
         const auto compileOptions = getCompilerOptions().compileOptions;
-        const auto info = compiler->getModuleInfo(input, compileOptions);
+        const auto info = ctx.compiler->getModuleInfo(input, compileOptions);
         auto &unit = unitList.emplace_back(
             input, info.exported, info.name,
-            compiler->getIncludeDeps(input, compileOptions), info.deps);
+            ctx.compiler->getIncludeDeps(input, compileOptions), info.deps);
         fs::create_directories(depJsonPath.parent_path());
         std::ofstream os(depJsonPath);
         os.exceptions(std::ifstream::failbit);
@@ -244,7 +234,7 @@ export class Builder {
       json::object commandObject;
       commandObject["directory"] = ctx.output.generic_string();
       commandObject["command"] =
-          this->compiler->compileCommand(input, output, ctx.debug);
+          ctx.compiler->compileCommand(input, output, ctx.debug);
       commandObject["file"] = input.generic_string();
       commandObject["output"] = output.generic_string();
       compileCommands.emplace_back(commandObject);
@@ -258,7 +248,7 @@ export class Builder {
   virtual FutureList build(const Context &ctx) const {
     const auto targetList = onBuild(ctx);
     const auto &target = targetList.getTarget();
-    BuilderContext builderCtx{ctx, compiler, getCompilerOptions()};
+    BuilderContext builderCtx{ctx, getCompilerOptions()};
     target.build(builderCtx);
     ctx.run();
     return builderCtx.takeFutureList();

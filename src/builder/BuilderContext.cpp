@@ -60,10 +60,10 @@ export struct BuilderContext : public VFSContext {
   const std::shared_ptr<const Compiler> &compiler;
   const CompilerOptions compilerOptions;
 
-  BuilderContext(CLRef<Context> ctx,
-                 CLRef<std::shared_ptr<const Compiler>> compiler,
-                 const CompilerOptions &compilerOptions)
-      : VFSContext(ctx), compiler(compiler), compilerOptions(compilerOptions) {}
+  BuilderContext(CLRef<Context> ctx, const CompilerOptions &compilerOptions)
+      : VFSContext(ctx),
+        compiler(ctx.compiler),
+        compilerOptions(compilerOptions) {}
 
   FutureList &&takeFutureList() { return std::move(futureList); }
 
@@ -141,7 +141,7 @@ export struct BuilderContextChild : public BuilderContext {
  public:
   BuilderContextChild(LRef<BuilderContext> parent, CLRef<Context> ctx,
                       const CompilerOptions &compilerOptions)
-      : BuilderContext(ctx, parent.compiler, compilerOptions), parent(parent) {
+      : BuilderContext(ctx, compilerOptions), parent(parent) {
     vfs.merge(parent.vfs);
     id = parent.id;
   }

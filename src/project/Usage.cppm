@@ -24,7 +24,6 @@ export struct Usage {
   // This is used if Usage does not inherit from Export.
   virtual std::shared_ptr<Export> getExport(
       const Context& ctx, const std::string& name,
-      const std::shared_ptr<Compiler>& compiler,
       std::function<const ExportSet&(const Path&)> findBuiltPackage) const {
     return nullptr;
   };
@@ -40,12 +39,10 @@ export struct CustomUsage : public Usage {
   std::variant<Path, std::vector<Path>> setupFile;
 
   std::shared_ptr<Export> getExport(const Context& ctx, const std::string& name,
-                                    const std::shared_ptr<Compiler>& compiler,
                                     std::function<const ExportSet&(const Path&)>
                                         findBuiltPackage) const override {
     LibBuilder builder(name + "_export");
-    builder.setShared(true).setCompiler(compiler).define("NO_MAIN").define(
-        "PROJECT_NAME=" + name);
+    builder.setShared(true).define("NO_MAIN").define("PROJECT_NAME=" + name);
     std::visit(
         [&](auto&& setupFile) {
           using T = std::decay_t<decltype(setupFile)>;

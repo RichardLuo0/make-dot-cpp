@@ -1,6 +1,7 @@
 export module makeDotCpp;
 
 import std;
+import makeDotCpp.compiler;
 import makeDotCpp.thread;
 
 #include "alias.hpp"
@@ -13,6 +14,7 @@ export struct Context {
   bool debug = false;
   Path relativePCMPath = "pcm";
   Path relativeObjPath = "obj";
+  std::shared_ptr<const Compiler> compiler;
 
   static inline ThreadPool threadPool{8};
   static inline DepGraph depGraph;

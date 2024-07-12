@@ -1,6 +1,7 @@
 export module makeDotCpp.project;
 import std;
 import makeDotCpp;
+import makeDotCpp.compiler;
 import boost.program_options;
 
 #include "alias.hpp"
@@ -88,6 +89,9 @@ export class Project {
   }
   chainMethod(setRelativeObjPath, std::string, path) {
     ctx.relativeObjPath = path;
+  }
+  chainMethod(setCompiler, std::shared_ptr<const Compiler>, compiler) {
+    ctx.compiler = compiler;
   }
 
  public:

@@ -43,9 +43,10 @@ class BuildFileProject {
 #ifdef _WIN32
     compiler->addOption("-D _WIN32");
 #endif
+    ctx.compiler = compiler;
 
     const auto projectDesc = ProjectDesc::create(projectJsonPath, packagesPath);
-    builder.setShared(true).setCompiler(compiler);
+    builder.setShared(true);
     std::visit(
         [&](auto&& buildFile) {
           using T = std::decay_t<decltype(buildFile)>;
@@ -94,11 +95,11 @@ class BuildFileProject {
     for (auto& path : projectDesc.getUsagePackages()) {
       buildExportPackage(path);
     }
-    packageExports.emplace(projectDesc.name,
-                           projectDesc.getUsageExport(
-                               ctx, compiler,
-                               std::bind(&BuildFileProject::findBuiltPackage,
-                                         this, std::placeholders::_1)));
+    packageExports.emplace(
+        projectDesc.name,
+        projectDesc.getUsageExport(
+            ctx, std::bind(&BuildFileProject::findBuiltPackage, this,
+                           std::placeholders::_1)));
   }
 
   const ExportSet& findBuiltPackage(const Path& path) {

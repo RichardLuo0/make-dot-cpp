@@ -17,11 +17,10 @@ extern "C" int build(const PackageExports &packageExports, int argc,
       .addOption("-I src/utils");
 
   LibBuilder libBuilder("makeDotCpp");
-  libBuilder.setShared(true).setCompiler(compiler).addSrc(
-      Glob("src/**/*.cppm"));
+  libBuilder.setShared(true).addSrc(Glob("src/**/*.cppm"));
 
   ExeBuilder builder("make.cpp");
-  builder.setCompiler(compiler).addSrc("src/main.cpp");
+  builder.addSrc("src/main.cpp");
 
   for (auto &package : packageExports | std::views::values) {
     libBuilder.dependOn(package);
@@ -30,6 +29,7 @@ extern "C" int build(const PackageExports &packageExports, int argc,
 
   Project()
       .setName("make-dot-cpp")
+      .setCompiler(compiler)
       .setBuild([&](const Context &ctx) {
         builder.dependOn(libBuilder.getExport(ctx));
 

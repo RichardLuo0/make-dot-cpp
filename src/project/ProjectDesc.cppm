@@ -45,12 +45,12 @@ export struct ProjectDesc {
   }
 
   std::shared_ptr<Export> getUsageExport(
-      const Context& ctx, const std::shared_ptr<Compiler>& compiler,
+      const Context& ctx,
       std::function<const ExportSet&(const Path&)> findBuiltPackage) const {
     if (auto ex = std::dynamic_pointer_cast<Export>(usage))
       return ex;
     else
-      return usage->getExport(ctx, name, compiler, findBuiltPackage);
+      return usage->getExport(ctx, name, findBuiltPackage);
   }
 
  private:
