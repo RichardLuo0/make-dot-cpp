@@ -1,5 +1,20 @@
-export using PackageExports =
-    std::unordered_map<std::string, std::shared_ptr<Export>>;
+module;
+#include <boost/describe.hpp>
+
+export module makeDotCpp.project.desc:Usage;
+import std;
+import :common;
+import makeDotCpp;
+import makeDotCpp.compiler;
+import makeDotCpp.builder;
+import makeDotCpp.thread;
+import makeDotCpp.utils;
+import boost.json;
+import boost.dll;
+
+#include "alias.hpp"
+
+namespace makeDotCpp {
 export using ExportSet = std::unordered_set<std::shared_ptr<Export>>;
 
 export struct Usage {
@@ -143,3 +158,14 @@ export struct DefaultUsage : public Export, public Usage {
                        (pcmPath, compileOption, linkOption, libs, packages), (),
                        ())
 };
+}  // namespace makeDotCpp
+
+namespace boost {
+namespace json {
+using namespace makeDotCpp;
+template <>
+struct is_described_class<CustomUsage> : std::true_type {};
+template <>
+struct is_described_class<DefaultUsage> : std::true_type {};
+}  // namespace json
+}  // namespace boost

@@ -1,3 +1,17 @@
+module;
+#include <boost/describe.hpp>
+
+export module makeDotCpp.project.desc:ProjectDesc;
+import std;
+import :common;
+import :Usage;
+import makeDotCpp;
+import makeDotCpp.compiler;
+import makeDotCpp.builder;
+import makeDotCpp.utils;
+import boost.json;
+
+namespace makeDotCpp {
 export struct ProjectDesc {
  public:
   std::string name;
@@ -53,3 +67,14 @@ export std::shared_ptr<Usage> tag_invoke(
   else
     return json::value_to<std::shared_ptr<Merge<DefaultUsage>>>(jv, ctx);
 }
+}  // namespace makeDotCpp
+
+namespace boost {
+namespace json {
+using namespace makeDotCpp;
+template <>
+struct is_described_class<ProjectDesc> : std::true_type {};
+template <>
+struct is_described_class<ProjectDesc::Dev> : std::true_type {};
+}  // namespace json
+}  // namespace boost

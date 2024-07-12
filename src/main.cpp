@@ -1,11 +1,13 @@
 import std;
 import makeDotCpp;
-import makeDotCpp.project;
+import makeDotCpp.project.api;
+import makeDotCpp.project.desc;
 import makeDotCpp.compiler;
 import makeDotCpp.compiler.Clang;
 import makeDotCpp.builder;
 import makeDotCpp.utils;
 import boost.dll;
+import boost.program_options;
 
 #include "alias.hpp"
 #include "macro.hpp"
@@ -126,29 +128,39 @@ class BuildFileProject {
   }
 };
 
+namespace po = boost::program_options;
+
+Path getPackagesPath(const po::variables_map& vm) {
+  const auto vv = vm["packages"];
+  return vv.empty() ? fs::weakly_canonical(std::getenv("CXX_PACKAGES"))
+                    : vv.as<Path>();
+}
+
 int main(int argc, const char** argv) {
-  Project::OptionParser op;
-  op.add("no-build", "do not build the project.");
-  op.parse(argc, argv);
-  if (op.contains("help")) {
-    op.printHelp();
-    return 0;
+  boost::program_options::options_description od;
+  po::variables_map vm;
+  od.add_options()("no-build", "do not build the project.");
+  od.add_options()("help,h", "display help message.");
+  po::store(po::parse_command_line(argc, argv, od), vm);
+  po::notify(vm);
+  if (vm.contains("help")) {
+    std::cout << od << std::endl;
   }
 
-  BuildFileProject project(fs::canonical("project.json"), op.getPackagesPath());
+  BuildFileProject project(fs::canonical("project.json"), getPackagesPath(vm));
   try {
     auto future = project.build();
     future.get();
     const auto output = project.getOutput();
     std::cout << "\033[0;32mBuilt " << output << "\033[0m" << std::endl;
 
-    if (op.contains("no-build")) return 0;
+    if (vm.contains("no-build")) return 0;
     boost::dll::shared_library lib(output.generic_string());
     auto build =
         lib.get<int(const PackageExports&, int, const char**)>("build");
     return build(project.getPackageExports(), argc, argv);
-  } catch (std::exception& e) {
+  } catch (const std::exception& e) {
     std::cerr << "\033[0;31mError: " << e.what() << "\033[0m" << std::endl;
+    return 1;
   }
-  return 0;
 }

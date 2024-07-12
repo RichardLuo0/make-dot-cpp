@@ -1,10 +1,19 @@
+export module makeDotCpp.project;
+import std;
+import makeDotCpp;
+import boost.program_options;
+
+#include "alias.hpp"
+#include "macro.hpp"
+
+namespace makeDotCpp {
 namespace po = boost::program_options;
 
 export class Project {
  public:
   struct OptionParser {
    private:
-    boost::program_options::options_description od;
+    po::options_description od;
     po::variables_map vm;
 
    public:
@@ -16,13 +25,19 @@ export class Project {
           .operator()("clean", "clean the output directory.")
           .operator()("output,o", po::value<Path>(),
                       "output directory. Default to `build`.")
-          .operator()("installPath,i", po::value<Path>(), "install directory.")
+          .operator()("installPath,i", po::value<Path>(),
+                      "installation directory.")
           .operator()("packages,p", po::value<Path>(), "packages directory.")
           .operator()("debug,g", "enable debug.");
     }
 
     void add(const std::string &name, const std::string &desc) {
       od.add_options()(name.c_str(), desc.c_str());
+    }
+
+    template <class T>
+    void add(const std::string &name, const std::string &desc) {
+      od.add_options()(name.c_str(), po::value<T>(), desc.c_str());
     }
 
     void parse(int argc, const char **argv) {
@@ -139,10 +154,13 @@ export class Project {
 
   static void updateFile(const Path &from, const Path &to) {
     fs::copy(from, to, fs::copy_options::update_existing);
+    std::cout << "Updating " << to << std::endl;
   }
 
   static void updateAllFiles(const Path &from, const Path &to) {
     fs::copy(from, to,
              fs::copy_options::update_existing | fs::copy_options::recursive);
+    std::cout << "Updating " << to << std::endl;
   }
 };
+}  // namespace makeDotCpp

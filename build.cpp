@@ -1,6 +1,7 @@
 import std;
 import makeDotCpp;
 import makeDotCpp.project;
+import makeDotCpp.project.api;
 import makeDotCpp.compiler.Clang;
 import makeDotCpp.fileProvider.Glob;
 import makeDotCpp.builder;
