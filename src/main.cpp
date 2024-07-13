@@ -105,26 +105,26 @@ class BuildFileProject {
   const ExportSet& findBuiltPackage(const Path& path) {
     std::unordered_set<Path> visited;
     std::function<const ExportSet&(const Path& path)> findBuiltPackageR =
-        [&](const Path& path) {
-          const auto projectJsonPath = fs::canonical(
-              fs::is_directory(path) ? path / "project.json" : path);
-          auto it = builtPackageCache.find(projectJsonPath);
-          if (it != builtPackageCache.end()) return it->second;
-          if (visited.contains(projectJsonPath))
-            throw CyclicPackageDependency(visited);
-          visited.emplace(projectJsonPath);
-          const auto& projectDesc = getProjectDesc(projectJsonPath);
-          const auto ex = std::dynamic_pointer_cast<Export>(projectDesc.usage);
-          if (ex == nullptr) throw PackageNotBuilt(projectDesc.name);
-          ExportSet exSet{ex};
-          for (auto& path : projectDesc.getUsagePackages()) {
-            auto& packages = findBuiltPackageR(path);
-            exSet.insert(packages.begin(), packages.end());
-          }
-          visited.erase(projectJsonPath);
-          return builtPackageCache.emplace(projectJsonPath, std::move(exSet))
-              .first->second;
-        };
+        [&](const Path& path) -> const ExportSet& {
+      const auto projectJsonPath =
+          fs::canonical(fs::is_directory(path) ? path / "project.json" : path);
+      auto it = builtPackageCache.find(projectJsonPath);
+      if (it != builtPackageCache.end()) return it->second;
+      if (visited.contains(projectJsonPath))
+        throw CyclicPackageDependency(visited);
+      visited.emplace(projectJsonPath);
+      const auto& projectDesc = getProjectDesc(projectJsonPath);
+      const auto ex = std::dynamic_pointer_cast<Export>(projectDesc.usage);
+      if (ex == nullptr) throw PackageNotBuilt(projectDesc.name);
+      ExportSet exSet{std::move(ex)};
+      for (auto& path : projectDesc.getUsagePackages()) {
+        auto& packages = findBuiltPackageR(path);
+        exSet.insert(packages.begin(), packages.end());
+      }
+      visited.erase(projectJsonPath);
+      return builtPackageCache.emplace(projectJsonPath, std::move(exSet))
+          .first->second;
+    };
     return findBuiltPackageR(path);
   }
 };
