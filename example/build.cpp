@@ -11,7 +11,7 @@ using namespace api;
 
 extern "C" int build(const ProjectContext &ctx) {
   Clang clang;
-  clang.addOption("-march=native -std=c++20 -Wall");
+  clang.addOption("-march=native -std=c++20 -Wall -Wextra");
 
   ExeBuilder builder("example");
   builder.addSrc(Glob("src/**/*.cpp*"))

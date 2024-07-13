@@ -13,8 +13,8 @@ using namespace api;
 
 extern "C" int build(const ProjectContext &ctx) {
   auto compiler = std::make_shared<Clang>();
-  compiler
-      ->addOption("-march=native -std=c++20 -Wall")
+  compiler->addOption("-march=native -std=c++20 -Wall -Wextra")
+      .addOption("-Wno-missing-field-initializers")
       // https://github.com/llvm/llvm-project/issues/75057;
       .addOption("-Wno-deprecated-declarations");
 

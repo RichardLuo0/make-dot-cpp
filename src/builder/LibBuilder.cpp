@@ -93,7 +93,7 @@ export class LibBuilder : public ObjBuilder {
     TargetList list(std::in_place_type<LibTarget>, name, isShared);
     auto &target = list.getTarget<LibTarget>();
     target.dependOn(list.append(buildObjTargetList(ctx, map)));
-    target.dependOn(buildExTargetList());
+    target.dependOn(getExportTargetList());
     return list;
   }
 

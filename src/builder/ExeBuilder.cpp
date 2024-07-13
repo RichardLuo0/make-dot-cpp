@@ -41,7 +41,7 @@ export class ExeBuilder : public ObjBuilder {
     TargetList list(std::in_place_type<ExeTarget>, name);
     auto &target = list.getTarget<ExeTarget>();
     target.dependOn(list.append(buildObjTargetList(ctx)));
-    target.dependOn(buildExTargetList());
+    target.dependOn(getExportTargetList());
     target.dependOn(getLinkOptionsJson(ctx));
     return list;
   }

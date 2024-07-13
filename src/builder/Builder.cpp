@@ -53,69 +53,44 @@ export class Builder {
  protected:
   chainVarSet(std::shared_ptr<const Export>, exSet, dependOn, ex) {
     exSet.emplace(ex);
-    coOpt.reset();
-    isExTargetListOutdated = true;
+    invalidate(CompilerOptions);
+    invalidate(ExportTargetList);
   }
 
  protected:
   const Path cache = "cache/" + name;
 
  private:
-  struct OptionsCache {
-   private:
-    std::unordered_map<const Context *, std::optional<Path>> map;
-
-   public:
-    std::optional<Path> &at(const Context &ctx) {
-      const auto it = map.find(&ctx);
-      return it != map.end() ? it->second
-                             : map.emplace(&ctx, std::nullopt).first->second;
-    }
-
-    void setOutdated() {
-      for (auto &pair : map) {
-        pair.second.reset();
-      }
-    }
-  };
-
   CompilerOptions compilerOptions;
 
-  mutable OptionsCache compileOptionsCache;
-  mutable OptionsCache linkOptionsCache;
-
-  void updateCacheFile(const Path &path, const std::string &content) const {
-    if (!fs::exists(path) || readAsStr(path) != content) {
-      std::ofstream os(path);
-      os << content;
-    }
-  }
-
  protected:
-#define GENERATE_GET_OPTIONS_JSON_METHOD(NAME, OPTIONS)                       \
-  Path NAME(const Context &ctx) const {                                       \
-    auto &pathOpt = OPTIONS##Cache.at(ctx);                                   \
-    if (!pathOpt.has_value()) {                                               \
-      auto &json = pathOpt.emplace(ctx.output / cache / STR(OPTIONS) ".txt"); \
-      updateCacheFile(json, compilerOptions.OPTIONS);                         \
-    }                                                                         \
-    return pathOpt.value();                                                   \
+#define GENERATE_OPTIONS_JSON_METHOD(NAME, OPTIONS)        \
+  void update##NAME(const Context &ctx) const {            \
+    const Path path = get##NAME(ctx);                      \
+    const auto &content = compilerOptions.OPTIONS;         \
+    if (!fs::exists(path) || readAsStr(path) != content) { \
+      std::ofstream os(path);                              \
+      os.exceptions(std::ifstream::failbit);               \
+      os << content;                                       \
+    }                                                      \
+  }                                                        \
+                                                           \
+  Path get##NAME(const Context &ctx) const {               \
+    return ctx.output / cache / STR(OPTIONS) ".txt";       \
   }
 
-  GENERATE_GET_OPTIONS_JSON_METHOD(getCompileOptionsJson, compileOptions);
-  GENERATE_GET_OPTIONS_JSON_METHOD(getLinkOptionsJson, linkOptions);
-#undef GENERATE_GET_OPTIONS_JSON_METHOD
+  GENERATE_OPTIONS_JSON_METHOD(CompileOptionsJson, compileOptions);
+  GENERATE_OPTIONS_JSON_METHOD(LinkOptionsJson, linkOptions);
+#undef GENERATE_OPTIONS_JSON_METHOD
 
   chainMethod(addSrc, FileProvider, p) { srcSet.merge(p.list()); }
   chainMethod(define, std::string, d) {
     compilerOptions.compileOptions += " -D " + d;
-    compileOptionsCache.setOutdated();
-    coOpt.reset();
+    invalidate(CompilerOptions);
   }
   chainMethod(include, Path, path) {
     compilerOptions.compileOptions += " -I " + path.generic_string();
-    compileOptionsCache.setOutdated();
-    coOpt.reset();
+    invalidate(CompilerOptions);
   }
 
  public:
@@ -188,38 +163,26 @@ export class Builder {
     return buildUnitList(ctx, inputInfo);
   }
 
- private:
-  mutable bool isExTargetListOutdated = true;
-  mutable std::deque<Ref<const Target>> _exTargetList;
-
- public:
-  auto buildExTargetList() const {
-    if (isExTargetListOutdated) {
-      _exTargetList.clear();
-      for (auto &ex : exSet) {
-        const auto target = ex->getTarget();
-        if (target.has_value()) _exTargetList.emplace_back(target.value());
-      }
-      isExTargetListOutdated = false;
+ protected:
+  cachedFunc(std::deque<Ref<const Target>>, ExportTargetList) {
+    std::deque<Ref<const Target>> exTargetList;
+    for (auto &ex : exSet) {
+      const auto target = ex->getTarget();
+      if (target.has_value()) exTargetList.emplace_back(target.value());
     }
-    return _exTargetList;
+    return exTargetList;
   }
 
- private:
-  mutable std::optional<CompilerOptions> coOpt;
-
  protected:
-  CompilerOptions getCompilerOptions() const {
-    if (!coOpt.has_value()) {
-      auto &co = coOpt.emplace();
-      for (auto &ex : exSet) {
-        co.compileOptions += ' ' + ex->getCompileOption();
-        co.linkOptions += ' ' + ex->getLinkOption();
-      }
-      co.compileOptions += ' ' + compilerOptions.compileOptions;
-      co.linkOptions += ' ' + compilerOptions.linkOptions;
+  cachedFunc(CompilerOptions, CompilerOptions) {
+    CompilerOptions co;
+    for (auto &ex : exSet) {
+      co.compileOptions += ' ' + ex->getCompileOption();
+      co.linkOptions += ' ' + ex->getLinkOption();
     }
-    return coOpt.value();
+    co.compileOptions += ' ' + compilerOptions.compileOptions;
+    co.linkOptions += ' ' + compilerOptions.linkOptions;
+    return co;
   }
 
   virtual TargetList onBuild(const Context &ctx) const = 0;
@@ -228,6 +191,8 @@ export class Builder {
   // Do not call build() on same ctx sequentially.
   // This will cause race condition.
   virtual FutureList build(const Context &ctx) const {
+    updateCompileOptionsJson(ctx);
+    updateLinkOptionsJson(ctx);
     const auto targetList = onBuild(ctx);
     const auto &target = targetList.getTarget();
     BuilderContext builderCtx{ctx, getCompilerOptions()};
