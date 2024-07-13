@@ -9,30 +9,31 @@ import makeDotCpp.builder;
 #include "src/utils/alias.hpp"
 
 using namespace makeDotCpp;
+using namespace api;
 
-extern "C" int build(const PackageExports &packageExports, int argc,
-                     const char **argv) {
+extern "C" int build(const ProjectContext &ctx) {
   auto compiler = std::make_shared<Clang>();
-  compiler->addOption("-march=native -std=c++20 -O3 -Wall")
-      .addOption("-I src/utils");
+  compiler
+      ->addOption("-march=native -std=c++20 -Wall")
+      // https://github.com/llvm/llvm-project/issues/75057;
+      .addOption("-Wno-deprecated-declarations");
 
   LibBuilder libBuilder("makeDotCpp");
-  libBuilder.setShared(true).addSrc(Glob("src/**/*.cppm"));
+  libBuilder.setShared(true).addSrc(Glob("src/**/*.cppm")).include("src/utils");
 
   ExeBuilder builder("make.cpp");
-  builder.addSrc("src/main.cpp");
+  builder.addSrc("src/main.cpp").include("src/utils");
 
-  for (auto &package : packageExports | std::views::values) {
+  for (auto &package : ctx.packageExports | std::views::values) {
     libBuilder.dependOn(package);
     builder.dependOn(package);
   }
 
   Project()
-      .setName("make-dot-cpp")
+      .setName(ctx.name)
       .setCompiler(compiler)
       .setBuild([&](const Context &ctx) {
         builder.dependOn(libBuilder.getExport(ctx));
-
         auto future = builder.build(ctx);
         future.get();
         std::cout << "\033[0;32mDone\033[0m" << std::endl;
@@ -59,6 +60,6 @@ extern "C" int build(const PackageExports &packageExports, int argc,
         { Project::updateFile("project.json", ctx.install); }
       })
       .to("build-make-dot-cpp")
-      .run(argc, argv);
+      .run(ctx.argc, ctx.argv);
   return 0;
 }

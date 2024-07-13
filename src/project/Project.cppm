@@ -20,16 +20,16 @@ export class Project {
    public:
     OptionParser() {
       od.add_options()
-          .operator()("help,h", "display help message.")
-          .operator()("build", "build the project.")
-          .operator()("install", "build and install the project.")
-          .operator()("clean", "clean the output directory.")
+          .operator()("help,h", "Display help message.")
+          .operator()("build", "Build the project.")
+          .operator()("install", "Build and install the project.")
+          .operator()("clean", "Clean the output directory.")
           .operator()("output,o", po::value<Path>(),
-                      "output directory. Default to `build`.")
+                      "Output directory. Default to `build`.")
           .operator()("installPath,i", po::value<Path>(),
-                      "installation directory.")
-          .operator()("packages,p", po::value<Path>(), "packages directory.")
-          .operator()("debug,g", "enable debug.");
+                      "Installation directory.")
+          .operator()("packages,p", po::value<Path>(), "Packages directory.")
+          .operator()("debug,g", "Enable debug.");
     }
 
     void add(const std::string &name, const std::string &desc) {
@@ -42,7 +42,11 @@ export class Project {
     }
 
     void parse(int argc, const char **argv) {
-      po::store(po::parse_command_line(argc, argv, od), vm);
+      po::store(po::command_line_parser(argc, argv)
+                    .options(od)
+                    .allow_unregistered()
+                    .run(),
+                vm);
       po::notify(vm);
     }
 
@@ -92,6 +96,13 @@ export class Project {
   }
   chainMethod(setCompiler, std::shared_ptr<const Compiler>, compiler) {
     ctx.compiler = compiler;
+  }
+
+ public:
+  template <class C>
+    requires std::is_base_of_v<Compiler, C>
+  auto &setCompiler(const C &compiler) {
+    return setCompiler(std::make_shared<C>(compiler));
   }
 
  public:

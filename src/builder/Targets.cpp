@@ -114,14 +114,6 @@ export struct UnitDeps : public Deps<ModuleTarget>, public FilesDeps {
  protected:
   using FilesDeps::FilesDeps;
 
-  std::optional<NodeList> buildNodeList(BuilderContext &ctx,
-                                        const Path &output) const {
-    const auto [nodeList, outputList] = Deps::buildNodeList(ctx);
-    return ctx.isNeedUpdate(output, concat<Path>(filesDeps, outputList))
-               ? std::make_optional(nodeList)
-               : std::nullopt;
-  }
-
   std::unordered_map<std::string, Path> getModuleMap(
       std::unordered_set<const ModuleTarget *> visited,
       BuilderContext &ctx) const {
@@ -137,13 +129,21 @@ export struct UnitDeps : public Deps<ModuleTarget>, public FilesDeps {
     return map;
   }
 
+ public:
   std::unordered_map<std::string, Path> getModuleMap(
       BuilderContext &ctx) const {
     std::unordered_set<const ModuleTarget *> visited;
     return getModuleMap(visited, ctx);
   }
 
- public:
+  std::optional<NodeList> buildNodeList(BuilderContext &ctx,
+                                        const Path &output) const {
+    const auto [nodeList, outputList] = Deps::buildNodeList(ctx);
+    return ctx.isNeedUpdate(output, concat<Path>(filesDeps, outputList))
+               ? std::make_optional(nodeList)
+               : std::nullopt;
+  }
+
   using Deps<ModuleTarget>::dependOn;
   using FilesDeps::dependOn;
 };
@@ -160,6 +160,8 @@ export struct PCMTarget : public UnitDeps, public CachedTarget<ModuleTarget> {
       : UnitDeps(includeDeps), name(name), input(input), output(output) {}
 
   const std::string &getName() const override { return name; }
+
+  const Path &getInput() const { return input; }
 
   Path getOutput(BuilderContext &ctx) const override {
     return ctx.pcmPath() / output;
@@ -193,6 +195,8 @@ export struct ObjTarget : public CachedTarget<> {
     NotModule(const Path &input, const ObjTarget &parent,
               const std::deque<Path> &includeDeps)
         : UnitDeps(includeDeps), parent(parent), input(input) {}
+
+    const Path &getInput() const { return input; }
 
     Path getOutput(BuilderContext &ctx) const override {
       return parent.getOutput(ctx);
@@ -239,6 +243,16 @@ export struct ObjTarget : public CachedTarget<> {
 
  protected:
   std::optional<Ref<Node>> onBuild(BuilderContext &ctx) const override {
+    // Record compile command for generating compile_commands.json
+    std::visit(
+        [&](auto &&internal) {
+          const Path input = internal.getInput();
+          api::compileCommands.emplace_back(
+              input, output,
+              ctx.compileCommand(input, internal.getModuleMap(ctx), output));
+        },
+        internal);
+
     return std::visit(
         [&](auto &&internal) -> std::optional<Ref<Node>> {
           auto nodeOpt = internal.build(ctx);

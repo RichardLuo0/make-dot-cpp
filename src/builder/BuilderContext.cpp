@@ -78,6 +78,13 @@ export struct BuilderContext : public VFSContext {
     return 0;
   }
 
+  std::string compileCommand(
+      const Path &input, const std::unordered_map<std::string, Path> &moduleMap,
+      const Path &output) const {
+    return compiler->compileCommand(input, output, ctx.debug, moduleMap,
+                                    compilerOptions.compileOptions);
+  }
+
 #define GENERATE_COMPILE_METHOD(NAME, INPUT, CAPTURE, LOGNAME, FUNC)        \
   template <ranges::range<Ref<Node>> Deps =                                 \
                 std::ranges::empty_view<Ref<Node>>>                         \
@@ -120,17 +127,14 @@ export struct BuilderContext : public VFSContext {
   GENERATE_COMPILE_METHOD(archive, (ranges::range<Path> auto &&objList),
                           (compiler = this->compiler,
                            objList = objList | ranges::to<std::vector<Path>>()),
-                          "Archiving",
-                          compiler->archive({objList.begin(), objList.end()},
-                                            output));
+                          "Archiving", compiler->archive(objList, output));
   GENERATE_COMPILE_METHOD(createSharedLib, (ranges::range<Path> auto &&objList),
                           (compiler = this->compiler,
                            objList = objList | ranges::to<std::vector<Path>>(),
                            linkOptions = this->compilerOptions.linkOptions),
                           "Archiving",
-                          compiler->createSharedLib({objList.begin(),
-                                                     objList.end()},
-                                                    output, linkOptions));
+                          compiler->createSharedLib(objList, output,
+                                                    linkOptions));
 #undef GENERATE_COMPILE_METHOD
 };
 

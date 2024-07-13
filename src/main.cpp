@@ -8,6 +8,7 @@ import makeDotCpp.builder;
 import makeDotCpp.utils;
 import boost.dll;
 import boost.program_options;
+import boost.json;
 
 #include "alias.hpp"
 #include "macro.hpp"
@@ -26,11 +27,12 @@ defException(PackageNotBuilt, (const std::string& name),
 
 class BuildFileProject {
  private:
-  Context ctx{"build", fs::weakly_canonical(".build")};
+  const ProjectDesc projectDesc;
+  Context ctx;
   const Path packagesPath;
   std::shared_ptr<Compiler> compiler = std::make_shared<Clang>();
   LibBuilder builder{"build"};
-  PackageExports packageExports;
+  api::PackageExports packageExports;
 
   std::unordered_map<Path, const ProjectDesc> projectDescCache;
   std::unordered_set<Path> builtExportPackageCache;
@@ -38,14 +40,17 @@ class BuildFileProject {
 
  public:
   BuildFileProject(const Path& projectJsonPath, const Path& packagesPath)
-      : packagesPath(packagesPath) {
+      : projectDesc(ProjectDesc::create(projectJsonPath, packagesPath)),
+        ctx(projectDesc.name + "_build", fs::weakly_canonical(".build")),
+        packagesPath(packagesPath),
+        builder(projectDesc.name + "_build") {
     compiler->addOption("-march=native -std=c++20 -Wall");
 #ifdef _WIN32
     compiler->addOption("-D _WIN32");
 #endif
     ctx.compiler = compiler;
+    ctx.debug = projectDesc.dev.debug;
 
-    const auto projectDesc = ProjectDesc::create(projectJsonPath, packagesPath);
     builder.setShared(true);
     std::visit(
         [&](auto&& buildFile) {
@@ -57,7 +62,6 @@ class BuildFileProject {
           }
         },
         projectDesc.dev.buildFile);
-    ctx.debug = projectDesc.dev.debug;
 
     for (auto& path : projectDesc.packages) {
       buildExportPackage(path);
@@ -70,11 +74,15 @@ class BuildFileProject {
 
   ~BuildFileProject() { ctx.threadPool.wait(); }
 
+  const std::string& getName() const { return projectDesc.name; }
+
+  const auto& getContext() const { return ctx; }
+
   auto build() { return builder.build(ctx); }
 
-  auto getOutput() { return builder.getOutput(ctx); }
+  auto getOutput() const { return builder.getOutput(ctx); }
 
-  const auto& getPackageExports() { return packageExports; }
+  const auto& getPackageExports() const { return packageExports; }
 
  protected:
   const ProjectDesc& getProjectDesc(const Path& projectJsonPath) {
@@ -137,12 +145,36 @@ Path getPackagesPath(const po::variables_map& vm) {
                     : vv.as<Path>();
 }
 
+void generateCompileCommands(
+    const Context& ctx, const ranges::range<api::CompileCommand> auto& ccs) {
+  json::array array;
+  for (const auto& cc : ccs) {
+    json::object cco;
+    cco["directory"] = ctx.output.generic_string();
+    cco["command"] = cc.command;
+    cco["file"] = cc.input.generic_string();
+    cco["output"] = cc.output.generic_string();
+    array.emplace_back(cco);
+  }
+  const auto ccPath = ctx.output / "compile_commands.json";
+  std::ofstream os(ccPath);
+  os.exceptions(std::ifstream::failbit);
+  os << array;
+  std::cout << "\033[0;32mBuilt " << ccPath << "\033[0m" << std::endl;
+}
+
 int main(int argc, const char** argv) {
-  boost::program_options::options_description od;
+  po::options_description od;
   po::variables_map vm;
-  od.add_options()("no-build", "do not build the project.");
-  od.add_options()("help,h", "display help message.");
-  po::store(po::parse_command_line(argc, argv, od), vm);
+  od.add_options()
+      .operator()("help,h", "Display help message.")
+      .operator()("no-build", "Do not build the project.")
+      .operator()("compile-commands", "Generate compile_commands.json");
+  po::store(po::command_line_parser(argc, argv)
+                .options(od)
+                .allow_unregistered()
+                .run(),
+            vm);
   po::notify(vm);
   if (vm.contains("help")) {
     std::cout << od << std::endl;
@@ -157,9 +189,14 @@ int main(int argc, const char** argv) {
 
     if (vm.contains("no-build")) return 0;
     boost::dll::shared_library lib(output.generic_string());
-    auto build =
-        lib.get<int(const PackageExports&, int, const char**)>("build");
-    return build(project.getPackageExports(), argc, argv);
+    auto build = lib.get<api::Build>("build");
+    // auto getCompileCommand =
+    //     lib.get<api::GetCompileCommand>("GetCompileCommand");
+    int ret =
+        build({project.getName(), project.getPackageExports(), argc, argv});
+    if (vm.contains("compile-commands"))
+      generateCompileCommands(project.getContext(), api::compileCommands);
+    return ret;
   } catch (const std::exception& e) {
     std::cerr << "\033[0;31mError: " << e.what() << "\033[0m" << std::endl;
     return 1;

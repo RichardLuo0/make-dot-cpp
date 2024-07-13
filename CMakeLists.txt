@@ -42,7 +42,7 @@ target_link_libraries(make.cpp PRIVATE std)
 target_link_libraries(make.cpp PRIVATE makeDotCpp)
 target_include_directories(make.cpp PRIVATE src/utils)
 target_link_libraries(make.cpp PRIVATE ${Boost_LIBRARIES})
-target_link_options(make.cpp PRIVATE C:/Users/Richard/Package/boost/lib/boost.dll.o C:/Users/Richard/Package/boost/lib/boost.program_options.o)
+target_link_options(make.cpp PRIVATE C:/Users/Richard/Package/boost/lib/boost.dll.o C:/Users/Richard/Package/boost/lib/boost.program_options.o C:/Users/Richard/Package/boost/lib/boost.json.o)
 
 # Install
 install(TARGETS makeDotCpp CXX_MODULES_BMI DESTINATION lib)

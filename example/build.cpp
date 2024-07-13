@@ -1,27 +1,25 @@
 import std;
 import makeDotCpp;
 import makeDotCpp.project;
+import makeDotCpp.project.api;
 import makeDotCpp.compiler.Clang;
 import makeDotCpp.fileProvider.Glob;
 import makeDotCpp.builder;
 
 using namespace makeDotCpp;
+using namespace api;
 
-extern "C" int build(const PackageExports &packageExports, int argc,
-                     const char **argv) {
-  Project::OptionParser op;
-  op.parse(argc, argv);
-
+extern "C" int build(const ProjectContext &ctx) {
   Clang clang;
-  clang.addOption("-march=native -std=c++20");
+  clang.addOption("-march=native -std=c++20 -Wall");
 
   ExeBuilder builder("example");
-  builder.setCompiler(clang)
-      .addSrc(Glob("src/**/*.cpp*"))
-      .dependOn(packageExports | std::views::values);
+  builder.addSrc(Glob("src/**/*.cpp*"))
+      .dependOn(ctx.packageExports | std::views::values);
 
   Project()
-      .setName("Example")
+      .setName(ctx.name)
+      .setCompiler(clang)
       .setDebug(true)
       .setBuild([&](const Context &ctx) {
         try {
@@ -33,6 +31,6 @@ extern "C" int build(const PackageExports &packageExports, int argc,
           throw e;
         }
       })
-      .run(op);
+      .run(ctx.argc, ctx.argv);
   return 0;
 }

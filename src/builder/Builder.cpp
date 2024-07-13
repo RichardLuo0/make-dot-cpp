@@ -225,24 +225,6 @@ export class Builder {
   virtual TargetList onBuild(const Context &ctx) const = 0;
 
  public:
-  void buildCompileCommands(const Context &ctx) const {
-    json::array compileCommands;
-    auto [inputSet, base] = buildInputInfo();
-    for (const auto &input : inputSet) {
-      const auto output =
-          ctx.objPath() / (fs::proximate(input, base) += ".obj");
-      json::object commandObject;
-      commandObject["directory"] = ctx.output.generic_string();
-      commandObject["command"] =
-          ctx.compiler->compileCommand(input, output, ctx.debug);
-      commandObject["file"] = input.generic_string();
-      commandObject["output"] = output.generic_string();
-      compileCommands.emplace_back(commandObject);
-    }
-    std::ofstream os((ctx.output / "compile_commands.json").generic_string());
-    os << compileCommands;
-  }
-
   // Do not call build() on same ctx sequentially.
   // This will cause race condition.
   virtual FutureList build(const Context &ctx) const {
