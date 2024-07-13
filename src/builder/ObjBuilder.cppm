@@ -1,3 +1,19 @@
+export module makeDotCpp.builder:ObjBuilder;
+import :Builder;
+import :Targets;
+import std;
+import makeDotCpp;
+import makeDotCpp.utils;
+
+#include "alias.hpp"
+#include "macro.hpp"
+
+namespace makeDotCpp {
+export defException(ModuleNotFound,
+                    (const Path input, const std::string &moduleName),
+                    input.generic_string() +
+                        ": module not found: " + moduleName);
+
 export class ObjBuilder : public Builder {
  protected:
   using ModuleMap = std::unordered_map<std::string, Ref<const ModuleTarget>>;
@@ -64,3 +80,4 @@ export class ObjBuilder : public Builder {
  public:
   using Builder::Builder;
 };
+}  // namespace makeDotCpp

@@ -1,3 +1,17 @@
+export module makeDotCpp.builder:LibBuilder;
+import :common;
+import :Targets;
+import :Builder;
+import :BuilderContext;
+import :ObjBuilder;
+import :Export;
+import std;
+import makeDotCpp;
+
+#include "alias.hpp"
+#include "macro.hpp"
+
+namespace makeDotCpp {
 export struct LibTarget : public CachedTarget<>, public Deps<> {
  private:
   const std::string name;
@@ -124,3 +138,4 @@ export class LibBuilder : public ObjBuilder {
                                                Context{name, outputPath});
   }
 };
+}  // namespace makeDotCpp

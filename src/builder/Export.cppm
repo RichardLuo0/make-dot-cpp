@@ -1,3 +1,14 @@
+export module makeDotCpp.builder:Export;
+import :Targets;
+import :BuilderContext;
+import :common;
+import std;
+import makeDotCpp;
+import makeDotCpp.utils;
+
+#include "alias.hpp"
+
+namespace makeDotCpp {
 export struct Export {
   virtual ~Export() = default;
 
@@ -82,3 +93,4 @@ export struct ModuleTargetProxy : public TargetProxy<ModuleTarget> {
     return target.getModuleMap(ctx);
   }
 };
+}  // namespace makeDotCpp

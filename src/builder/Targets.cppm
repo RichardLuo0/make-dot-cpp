@@ -1,3 +1,15 @@
+export module makeDotCpp.builder:Targets;
+import :common;
+import :BuilderContext;
+import std;
+import makeDotCpp;
+import makeDotCpp.project.api;
+import makeDotCpp.utils;
+
+#include "alias.hpp"
+#include "macro.hpp"
+
+namespace makeDotCpp {
 export struct Target {
   Target() = default;
   Target(const Target &) = delete;
@@ -101,16 +113,17 @@ export struct FilesDeps {
   void dependOn(const Path &path) { filesDeps.emplace_back(path); }
 };
 
+export defException(CyclicModuleDependency,
+                    (ranges::range<const ModuleTarget *> auto &&visited),
+                    "detected cyclic module dependency: " +
+                        (visited |
+                         std::views::transform([](auto *target) -> std::string {
+                           return target->getName() + ' ';
+                         }) |
+                         std::views::join | ranges::to<std::string>()));
+
 export struct UnitDeps : public Deps<ModuleTarget>, public FilesDeps {
  public:
-  defException(CyclicModuleDependency, (std::ranges::range auto &&visited),
-               "detected cyclic module dependency: " +
-                   (visited |
-                    std::views::transform([](auto *target) -> std::string {
-                      return target->getName() + ' ';
-                    }) |
-                    std::views::join | ranges::to<std::string>()));
-
  protected:
   using FilesDeps::FilesDeps;
 
@@ -274,3 +287,4 @@ export struct ObjTarget : public CachedTarget<> {
         internal);
   }
 };
+}  // namespace makeDotCpp

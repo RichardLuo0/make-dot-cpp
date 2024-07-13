@@ -1,3 +1,24 @@
+module;
+#include <boost/describe.hpp>
+
+export module makeDotCpp.builder:BuilderContext;
+import :common;
+import std;
+import makeDotCpp;
+import makeDotCpp.compiler;
+import makeDotCpp.thread;
+import makeDotCpp.thread.logger;
+import makeDotCpp.thread.process;
+import makeDotCpp.utils;
+
+#include "alias.hpp"
+#include "macro.hpp"
+
+namespace makeDotCpp {
+export defException(FileNotFound, (const Path &file),
+                    "file not found: " + file.generic_string());
+export defException(CompileError, (), "compile error");
+
 export struct CompilerOptions {
   std::string compileOptions;
   std::string linkOptions;
@@ -157,3 +178,4 @@ export struct BuilderContextChild : public BuilderContext {
               std::back_inserter(parent.futureList));
   }
 };
+}  // namespace makeDotCpp

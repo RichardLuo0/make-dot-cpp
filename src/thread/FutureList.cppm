@@ -1,6 +1,6 @@
 export module makeDotCpp.thread:FutureList;
-import std;
 import :ThreadPool;
+import std;
 
 namespace makeDotCpp {
 export class FutureList : public std::vector<std::future<ThreadPool::RetType>> {

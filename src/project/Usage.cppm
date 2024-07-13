@@ -2,8 +2,8 @@ module;
 #include <boost/describe.hpp>
 
 export module makeDotCpp.project.desc:Usage;
-import std;
 import :common;
+import std;
 import makeDotCpp;
 import makeDotCpp.compiler;
 import makeDotCpp.builder;

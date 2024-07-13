@@ -1,6 +1,6 @@
 export module makeDotCpp.thread:DepGraph;
-import std;
 import :ThreadPool;
+import std;
 
 #include "alias.hpp"
 

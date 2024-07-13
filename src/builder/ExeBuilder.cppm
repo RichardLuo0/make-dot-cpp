@@ -1,3 +1,17 @@
+export module makeDotCpp.builder:ExeBuilder;
+import :common;
+import :Targets;
+import :Builder;
+import :BuilderContext;
+import :ObjBuilder;
+import :Export;
+import std;
+import makeDotCpp;
+
+#include "alias.hpp"
+#include "macro.hpp"
+
+namespace makeDotCpp {
 export struct ExeTarget : public CachedTarget<>,
                           public Deps<>,
                           public FilesDeps {
@@ -46,3 +60,4 @@ export class ExeBuilder : public ObjBuilder {
     return list;
   }
 };
+}  // namespace makeDotCpp

@@ -1,3 +1,21 @@
+module;
+#include <boost/describe.hpp>
+
+export module makeDotCpp.builder:Builder;
+import :BuilderContext;
+import :Targets;
+import :Export;
+import std;
+import makeDotCpp;
+import makeDotCpp.thread;
+import makeDotCpp.fileProvider;
+import makeDotCpp.utils;
+import boost.json;
+
+#include "alias.hpp"
+#include "macro.hpp"
+
+namespace makeDotCpp {
 export struct Unit {
   Path input;
   bool exported = false;
@@ -203,3 +221,11 @@ export class Builder {
 
   virtual Path getOutput(const Context &ctx) const = 0;
 };
+}  // namespace makeDotCpp
+
+namespace boost {
+namespace json {
+template <>
+struct is_described_class<makeDotCpp::Unit> : std::true_type {};
+}  // namespace json
+}  // namespace boost
