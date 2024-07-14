@@ -9,10 +9,10 @@ import makeDotCpp.utils;
 #include "macro.hpp"
 
 namespace makeDotCpp {
-export defException(ModuleNotFound,
-                    (const Path input, const std::string &moduleName),
-                    input.generic_string() +
-                        ": module not found: " + moduleName);
+export DEF_EXCEPTION(ModuleNotFound,
+                     (const Path input, const std::string &moduleName),
+                     input.generic_string() +
+                         ": module not found: " + moduleName);
 
 export class ObjBuilder : public Builder {
  protected:

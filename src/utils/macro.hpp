@@ -18,7 +18,7 @@
 #define OVERLOAD_3(_1, _2, _3, NAME, ...) NAME
 #define OVERLOAD_4(_1, _2, _3, _4, NAME, ...) NAME
 
-#define chainMethod(SETTER, TYPE, VALUE)   \
+#define CHAIN_METHOD(SETTER, TYPE, VALUE)  \
  public:                                   \
   inline auto &SETTER(const TYPE &VALUE) { \
     this->_##SETTER(VALUE);                \
@@ -28,17 +28,17 @@
  private:                                  \
   inline void _##SETTER(const TYPE &VALUE)
 
-#define chainVar_0(TYPE, NAME, DEFAULT_VALUE, SETTER) \
-  TYPE NAME = DEFAULT_VALUE;                          \
-                                                      \
- public:                                              \
-  inline auto &SETTER(const TYPE &NAME) noexcept {    \
-    this->NAME = NAME;                                \
-    return *this;                                     \
-  }                                                   \
-                                                      \
+#define CHAIN_VAR_0(TYPE, NAME, DEFAULT_VALUE, SETTER) \
+  TYPE NAME = DEFAULT_VALUE;                           \
+                                                       \
+ public:                                               \
+  inline auto &SETTER(const TYPE &NAME) noexcept {     \
+    this->NAME = NAME;                                 \
+    return *this;                                      \
+  }                                                    \
+                                                       \
  private:
-#define chainVar_1(TYPE, NAME, SETTER)             \
+#define CHAIN_VAR_1(TYPE, NAME, SETTER)            \
   TYPE NAME;                                       \
                                                    \
  public:                                           \
@@ -48,20 +48,20 @@
   }                                                \
                                                    \
  private:
-#define chainVar(...) \
-  OVERLOAD_4(__VA_ARGS__, chainVar_0, chainVar_1)(__VA_ARGS__)
+#define CHAIN_VAR(...) \
+  OVERLOAD_4(__VA_ARGS__, CHAIN_VAR_0, CHAIN_VAR_1)(__VA_ARGS__)
 
-#define chainVarList(TYPE, NAME, SETTER, VALUE) \
-  std::deque<TYPE> NAME;                        \
-                                                \
-  chainMethod(SETTER, TYPE, VALUE)
+#define CHAIN_VAR_LIST(TYPE, NAME, SETTER, VALUE) \
+  std::deque<TYPE> NAME;                          \
+                                                  \
+  CHAIN_METHOD(SETTER, TYPE, VALUE)
 
-#define chainVarSet(TYPE, NAME, SETTER, VALUE) \
-  std::unordered_set<TYPE> NAME;               \
-                                               \
-  chainMethod(SETTER, TYPE, VALUE)
+#define CHAIN_VAR_SET(TYPE, NAME, SETTER, VALUE) \
+  std::unordered_set<TYPE> NAME;                 \
+                                                 \
+  CHAIN_METHOD(SETTER, TYPE, VALUE)
 
-#define defException(NAME, ARGS, MSG)                                   \
+#define DEF_EXCEPTION(NAME, ARGS, MSG)                                  \
   class NAME : public std::exception {                                  \
    private:                                                             \
     std::string msg;                                                    \
@@ -73,7 +73,7 @@
     const char *what() const noexcept override { return msg.c_str(); }; \
   };
 
-#define cachedFunc(TYPE, NAME)                                           \
+#define CACHED_FUNC(TYPE, NAME)                                          \
   const TYPE &get##NAME() const {                                        \
     if (!_##NAME##Opt.has_value()) _##NAME##Opt.emplace(_build##NAME()); \
     return _##NAME##Opt.value();                                         \
@@ -84,4 +84,4 @@
                                                                          \
   inline TYPE _build##NAME() const
 
-#define invalidate(NAME) _##NAME##Opt.reset()
+#define INVALIDATE(NAME) _##NAME##Opt.reset()

@@ -7,6 +7,7 @@ import :ObjBuilder;
 import :Export;
 import std;
 import makeDotCpp;
+import makeDotCpp.utils;
 
 #include "alias.hpp"
 #include "macro.hpp"
@@ -26,82 +27,77 @@ export struct LibTarget : public CachedTarget<>, public Deps<> {
     return ctx.output / ("lib" + name + (isShared ? SHLIB_POSTFIX : ".a"));
   }
 
-  Path getOutput(BuilderContext &ctx) const override {
+  Path getOutput(const CtxWrapper &ctx) const override {
     return LibTarget::getOutput(ctx.ctx, name, isShared);
   }
 
   std::optional<Ref<Node>> onBuild(BuilderContext &ctx) const override {
-    const auto [nodeList, objView] = Deps::buildNodeList(ctx);
+    const auto nodeList = Deps::buildNodeList(ctx);
+    const auto depsOutput = Deps::getDepsOutput(ctx);
     const Path output = getOutput(ctx);
-    if (!objView.empty() && ctx.isNeedUpdate(output, objView)) {
-      return isShared ? ctx.createSharedLib(objView, output, nodeList)
-                      : ctx.archive(objView, output, nodeList);
+    if (!depsOutput.empty() && ctx.isNeedUpdate(output, depsOutput)) {
+      return isShared ? ctx.createSharedLib(depsOutput, output, nodeList)
+                      : ctx.archive(depsOutput, output, nodeList);
     }
     return std::nullopt;
   }
 };
 
-export class LibBuilder : public ObjBuilder {
+template <class T = Target>
+struct TargetProxy : public T {
  protected:
-  struct LibExport : public Export {
-   protected:
-    ModuleMap moduleMap;
-    const TargetList targetList;
+  const T &target;
+  const CompilerOptions &compilerOptions;
 
-   public:
-    LibExport(const LibBuilder &builder, const Context &ctx)
-        : targetList(builder.onBuild(ctx, moduleMap)) {}
+ public:
+  TargetProxy(CLRef<T> target, CLRef<CompilerOptions> compilerOptions)
+      : target(target), compilerOptions(compilerOptions) {}
 
-    virtual std::optional<Ref<const ModuleTarget>> findPCM(
-        const std::string &moduleName) const override {
-      const auto it = moduleMap.find(moduleName);
-      return it == moduleMap.end() ? std::nullopt
-                                   : std::make_optional(it->second);
-    };
+  std::optional<Ref<Node>> build(BuilderContext &parent) const override {
+    BuilderContextChild child(parent, compilerOptions);
+    return target.build(child);
+  }
 
-    std::optional<Ref<const Target>> getTarget() const override {
-      return targetList.getTarget();
-    };
+  Path getOutput(const CtxWrapper &ctx) const override {
+    return target.getOutput(ctx);
+  }
+
+  struct EqualTo {
+    using is_transparent = void;
+
+    constexpr bool operator()(const TargetProxy<T> &lhs,
+                              const Target &rhs) const {
+      return &lhs.target == &rhs;
+    }
   };
 
-  struct ExternalLibExport : public LibExport {
-   private:
-    const std::optional<Context> ctx;
-    const std::optional<CompilerOptions> compilerOptions;
-    const TargetProxy<> target;
-    mutable std::unordered_set<ModuleTargetProxy, ModuleTargetProxy::Hash,
-                               ModuleTargetProxy::EqualTo>
-        pcmCache;
+  struct Hash : public std::hash<const Target *> {
+    using Base = std::hash<const Target *>;
+    using is_transparent = void;
 
-    auto getFromCache(const ModuleTarget &target) const {
-      const auto it = pcmCache.find(target);
-      return std::ref(
-          it != pcmCache.end()
-              ? *it
-              : *pcmCache.emplace(target, ctx, compilerOptions).first);
+    std::size_t operator()(const TargetProxy<T> &proxy) const {
+      return Base::operator()(&proxy.target);
     }
 
-   public:
-    ExternalLibExport(const LibBuilder &builder, const Context &ctx)
-        : LibExport(builder, ctx),
-          ctx(ctx),
-          compilerOptions(builder.getCompilerOptions()),
-          target(targetList.getTarget(), this->ctx, this->compilerOptions) {}
-
-    virtual std::optional<Ref<const ModuleTarget>> findPCM(
-        const std::string &moduleName) const override {
-      const auto targetOpt = LibExport::findPCM(moduleName);
-      return targetOpt.has_value()
-                 ? std::make_optional(getFromCache(targetOpt.value().get()))
-                 : std::nullopt;
+    std::size_t operator()(const Target &target) const {
+      return Base::operator()(&target);
     }
-
-    std::optional<Ref<const Target>> getTarget() const override {
-      return target;
-    };
   };
+};
 
-  mutable std::shared_ptr<LibExport> ex;
+struct ModuleTargetProxy : public TargetProxy<ModuleTarget> {
+  using TargetProxy<ModuleTarget>::TargetProxy;
+
+  const std::string &getName() const override { return target.getName(); };
+
+  ModuleMap getModuleMap(const CtxWrapper &ctx) const override {
+    return target.getModuleMap(ctx);
+  }
+};
+
+export class LibBuilder : public ObjBuilder, public ExportFactory {
+ protected:
+  CHAIN_VAR(bool, isShared, false, setShared);
 
   TargetList onBuild(const Context &ctx, ModuleMap &map) const {
     TargetList list(std::in_place_type<LibTarget>, name, isShared);
@@ -116,8 +112,6 @@ export class LibBuilder : public ObjBuilder {
     return onBuild(ctx, map);
   }
 
-  chainVar(bool, isShared, false, setShared);
-
  public:
   using ObjBuilder::ObjBuilder;
 
@@ -128,14 +122,47 @@ export class LibBuilder : public ObjBuilder {
     return LibTarget::getOutput(ctx, name, isShared);
   }
 
-  std::shared_ptr<Export> getExport(const Context &ctx) const {
-    if (ex == nullptr) ex = std::make_shared<LibExport>(*this, ctx);
-    return ex;
-  }
+ protected:
+  struct LibExport : public Export {
+    CompilerOptions compilerOptions;
+    ModuleMap moduleMap;
+    const TargetList targetList;
+    const TargetProxy<> target;
+    mutable std::unordered_set<ModuleTargetProxy, ModuleTargetProxy::Hash,
+                               ModuleTargetProxy::EqualTo>
+        proxyCache;
 
-  std::shared_ptr<Export> createExport(const Path &outputPath) const {
-    return std::make_shared<ExternalLibExport>(*this,
-                                               Context{name, outputPath});
-  }
+   protected:
+    auto getFromCache(const Ref<const ModuleTarget> &target) const {
+      const auto it = proxyCache.find(target.get());
+      return std::ref(it != proxyCache.end()
+                          ? *it
+                          : *proxyCache.emplace(target, compilerOptions).first);
+    }
+
+   public:
+    LibExport(const LibBuilder &builder, const Context &ctx)
+        : compilerOptions(builder.getCompilerOptions()),
+          targetList(builder.onBuild(ctx, moduleMap)),
+          target(targetList.getTarget(), compilerOptions) {}
+
+    std::optional<Ref<const ModuleTarget>> findPCM(
+        const std::string &moduleName) const override {
+      const auto it = moduleMap.find(moduleName);
+      return it == moduleMap.end()
+                 ? std::nullopt
+                 : std::make_optional(getFromCache(it->second));
+    };
+
+    std::optional<Ref<const Target>> getTarget() const override {
+      return target;
+    };
+  };
+
+ public:
+  std::shared_ptr<Export> onCreate(const Context &ctx) const override {
+    updateEverything(ctx);
+    return std::make_shared<LibExport>(*this, ctx);
+  };
 };
 }  // namespace makeDotCpp

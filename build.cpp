@@ -13,28 +13,29 @@ using namespace api;
 
 extern "C" int build(const ProjectContext &ctx) {
   auto compiler = std::make_shared<Clang>();
-  compiler->addOption("-march=native -std=c++20 -Wall -Wextra")
+  compiler->addOption("-march=native -O3 -std=c++20 -Wall -Wextra")
       .addOption("-Wno-missing-field-initializers")
       // https://github.com/llvm/llvm-project/issues/75057;
       .addOption("-Wno-deprecated-declarations");
 
-  LibBuilder libBuilder("makeDotCpp");
-  libBuilder.setShared(true).addSrc(Glob("src/**/*.cppm")).include("src/utils");
+  auto libBuilder = std::make_shared<LibBuilder>("makeDotCpp");
+  libBuilder->setShared(true)
+      .addSrc(Glob("src/**/*.cppm"))
+      .include("src/utils");
 
-  ExeBuilder builder("make.cpp");
-  builder.addSrc("src/main.cpp").include("src/utils");
+  auto builder = std::make_shared<ExeBuilder>("make.cpp");
+  builder->addSrc("src/main.cpp").include("src/utils");
 
   for (auto &package : ctx.packageExports | std::views::values) {
-    libBuilder.dependOn(package);
-    builder.dependOn(package);
+    libBuilder->dependOn(package);
+    builder->dependOn(package);
   }
+  builder->dependOn(libBuilder);
 
-  Project()
-      .setName(ctx.name)
+  Project(ctx.name)
       .setCompiler(compiler)
       .setBuild([&](const Context &ctx) {
-        builder.dependOn(libBuilder.getExport(ctx));
-        auto future = builder.build(ctx);
+        auto future = builder->build(ctx);
         future.get();
         std::cout << "\033[0;32mDone\033[0m" << std::endl;
       })
@@ -47,8 +48,8 @@ extern "C" int build(const ProjectContext &ctx) {
         {
           const Path binPath = ctx.install / "bin";
           Project::ensureDirExists(binPath);
-          Project::updateFile(builder.getOutput(ctx), binPath);
-          Project::updateFile(libBuilder.getOutput(ctx), binPath);
+          Project::updateFile(builder->getOutput(ctx), binPath);
+          Project::updateFile(libBuilder->getOutput(ctx), binPath);
         }
 
         {

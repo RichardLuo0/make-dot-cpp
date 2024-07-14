@@ -1,12 +1,13 @@
 export module makeDotCpp;
 
 import std;
-import makeDotCpp.compiler;
 import makeDotCpp.thread;
 
 #include "alias.hpp"
 
 namespace makeDotCpp {
+struct Compiler;
+
 export struct Context {
   std::string name = "Project";
   Path output = fs::weakly_canonical("build");

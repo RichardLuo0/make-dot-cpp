@@ -10,12 +10,12 @@ import boost.json;
 namespace makeDotCpp {
 export class Clang : public Compiler {
  public:
-  defException(ScanDepsError, (const Path &input),
-               "scanning deps: " + input.generic_string());
+  DEF_EXCEPTION(ScanDepsError, (const Path &input),
+                "scanning deps: " + input.generic_string());
 
  private:
-  std::string compileOptions;
-  std::string linkOptions;
+  std::string compileOption;
+  std::string linkOption;
 
  protected:
   std::string getModuleMapStr(
@@ -30,12 +30,12 @@ export class Clang : public Compiler {
 
  public:
   Clang &addOption(std::string option) override {
-    compileOptions += ' ' + option;
+    compileOption += ' ' + option;
     return *this;
   };
 
   Clang &addLinkOption(std::string option) override {
-    linkOptions += ' ' + option;
+    linkOption += ' ' + option;
     return *this;
   };
 
@@ -55,7 +55,7 @@ export class Clang : public Compiler {
     return std::format(
         "{} -fansi-escape-codes -fcolor-diagnostics "
         "-std=c++20 --precompile -c {} {} {} {} -o {}",
-        process::findExecutable("clang++"), compileOptions,
+        process::findExecutable("clang++"), compileOption,
         getModuleMapStr(moduleMap), extraOptions, input.generic_string(),
         output.generic_string());
   }
@@ -69,7 +69,7 @@ export class Clang : public Compiler {
     return std::format(
         "{} -fansi-escape-codes -fcolor-diagnostics -c {} {} {} {} {} -o {}",
         process::findExecutable("clang++"), (isDebug ? "-g" : ""),
-        compileOptions, getModuleMapStr(moduleMap), extraOptions,
+        compileOption, getModuleMapStr(moduleMap), extraOptions,
         input.generic_string(), output.generic_string());
   }
 
@@ -84,7 +84,7 @@ export class Clang : public Compiler {
     }
     return std::format(
         "{} -fansi-escape-codes -fcolor-diagnostics {} {} {} {} -o {}",
-        process::findExecutable("clang++"), (isDebug ? "-g" : ""), linkOptions,
+        process::findExecutable("clang++"), (isDebug ? "-g" : ""), linkOption,
         extraOptions, objList, output.generic_string());
   }
 
@@ -108,7 +108,7 @@ export class Clang : public Compiler {
       objList += obj.generic_string() + ' ';
     }
     return std::format("{} -shared -Wl,-export-all-symbols {} {} {} -o {}",
-                       process::findExecutable("clang++"), linkOptions,
+                       process::findExecutable("clang++"), linkOption,
                        extraOptions, objList, output.generic_string());
   }
 #undef GENERATE_COMPILE_METHOD
@@ -117,7 +117,7 @@ export class Clang : public Compiler {
       const Path &input, const std::string &extraOptions = "") const override {
     const auto result = process::run(
         std::format("{} {} {} -MM {}", process::findExecutable("clang++"),
-                    compileOptions, extraOptions, input.generic_string()));
+                    compileOption, extraOptions, input.generic_string()));
     if (result.status != 0) throw ScanDepsError(input);
     const auto &output = result.output;
     std::deque<Path> deps;

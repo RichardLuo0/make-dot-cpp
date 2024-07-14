@@ -31,8 +31,6 @@ export struct Unit {
 
 export class Builder {
  protected:
-  friend struct BuilderContext;
-
   struct TargetList {
    private:
     std::unique_ptr<Target> target;
@@ -66,13 +64,20 @@ export class Builder {
   std::string name = "builder";
 
  protected:
-  chainVarSet(Path, srcSet, addSrc, src) { srcSet.emplace(src); };
+  CHAIN_VAR_SET(Path, srcSet, addSrc, src) { srcSet.emplace(src); };
 
  protected:
-  chainVarSet(std::shared_ptr<const Export>, exSet, dependOn, ex) {
-    exSet.emplace(ex);
-    invalidate(CompilerOptions);
-    invalidate(ExportTargetList);
+  CHAIN_VAR_SET(std::shared_ptr<const ExportFactory>, exFactorySet, dependOn,
+                exFactory) {
+    exFactorySet.emplace(exFactory);
+  }
+
+ protected:
+  mutable std::unordered_set<std::shared_ptr<const Export>> exSet;
+
+  void updateExportSet(const Context &ctx) const {
+    exSet.clear();
+    for (auto &exFactory : exFactorySet) exSet.emplace(exFactory->create(ctx));
   }
 
  protected:
@@ -97,40 +102,26 @@ export class Builder {
     return ctx.output / cache / STR(OPTIONS) ".txt";       \
   }
 
-  GENERATE_OPTIONS_JSON_METHOD(CompileOptionsJson, compileOptions);
-  GENERATE_OPTIONS_JSON_METHOD(LinkOptionsJson, linkOptions);
+  GENERATE_OPTIONS_JSON_METHOD(CompileOptionsJson, compileOption);
+  GENERATE_OPTIONS_JSON_METHOD(LinkOptionsJson, linkOption);
 #undef GENERATE_OPTIONS_JSON_METHOD
 
-  chainMethod(addSrc, FileProvider, p) { srcSet.merge(p.list()); }
-  chainMethod(define, std::string, d) {
-    compilerOptions.compileOptions += " -D " + d;
-    invalidate(CompilerOptions);
+  CHAIN_METHOD(addSrc, FileProvider, p) { srcSet.merge(p.list()); }
+  CHAIN_METHOD(define, std::string, d) {
+    compilerOptions.compileOption += " -D " + d;
   }
-  chainMethod(include, Path, path) {
-    compilerOptions.compileOptions += " -I " + path.generic_string();
-    invalidate(CompilerOptions);
+  CHAIN_METHOD(include, Path, path) {
+    compilerOptions.compileOption += " -I " + path.generic_string();
   }
 
  public:
   Builder(const std::string &name) : name(name) {}
   virtual ~Builder() = default;
 
-  template <class E, class... Args>
-    requires std::is_base_of_v<Export, E>
-  inline auto &dependOn(Args &&...args) {
-    dependOn(std::make_shared<const E>(std::forward<Args>(args)...));
-    return *this;
-  }
-
-  template <class E>
-    requires(std::is_base_of_v<Export, E> && !std::is_const_v<E>)
-  inline auto &dependOn(E &&ex) {
-    return dependOn(std::move(ex));
-  }
-
-  chainMethod(dependOn, ranges::range<const std::shared_ptr<const Export>> auto,
-              exs) {
-    for (auto &ex : exs) dependOn(ex);
+  CHAIN_METHOD(dependOn,
+               ranges::range<const std::shared_ptr<const ExportFactory>> auto,
+               exFactories) {
+    for (auto &exFactory : exFactories) dependOn(exFactory);
   }
 
  protected:
@@ -162,11 +153,11 @@ export class Builder {
         const auto depJson = parseJson(depJsonPath);
         unitList.emplace_back(json::value_to<Unit>(depJson));
       } else {
-        const auto compileOptions = getCompilerOptions().compileOptions;
-        const auto info = ctx.compiler->getModuleInfo(input, compileOptions);
+        const auto compileOption = getCompilerOptions().compileOption;
+        const auto info = ctx.compiler->getModuleInfo(input, compileOption);
         auto &unit = unitList.emplace_back(
             input, info.exported, info.name,
-            ctx.compiler->getIncludeDeps(input, compileOptions), info.deps);
+            ctx.compiler->getIncludeDeps(input, compileOption), info.deps);
         fs::create_directories(depJsonPath.parent_path());
         std::ofstream os(depJsonPath);
         os.exceptions(std::ifstream::failbit);
@@ -181,26 +172,40 @@ export class Builder {
     return buildUnitList(ctx, inputInfo);
   }
 
- protected:
-  cachedFunc(std::deque<Ref<const Target>>, ExportTargetList) {
-    std::deque<Ref<const Target>> exTargetList;
+#define GENERATE_UPDATE_GET(TYPE, NAME, FUNC_NAME)    \
+ private:                                             \
+  mutable TYPE NAME;                                  \
+                                                      \
+ protected:                                           \
+  const TYPE &get##FUNC_NAME() const { return NAME; } \
+                                                      \
+  void update##FUNC_NAME() const
+
+  GENERATE_UPDATE_GET(std::deque<Ref<const Target>>, exTargetList,
+                      ExportTargetList) {
+    exTargetList.clear();
     for (auto &ex : exSet) {
       const auto target = ex->getTarget();
       if (target.has_value()) exTargetList.emplace_back(target.value());
     }
-    return exTargetList;
   }
-
- protected:
-  cachedFunc(CompilerOptions, CompilerOptions) {
-    CompilerOptions co;
+  GENERATE_UPDATE_GET(CompilerOptions, co, CompilerOptions) {
+    co = {};
     for (auto &ex : exSet) {
-      co.compileOptions += ' ' + ex->getCompileOption();
-      co.linkOptions += ' ' + ex->getLinkOption();
+      co.compileOption += ' ' + ex->getCompileOption();
+      co.linkOption += ' ' + ex->getLinkOption();
     }
-    co.compileOptions += ' ' + compilerOptions.compileOptions;
-    co.linkOptions += ' ' + compilerOptions.linkOptions;
-    return co;
+    co.compileOption += ' ' + compilerOptions.compileOption;
+    co.linkOption += ' ' + compilerOptions.linkOption;
+  }
+#undef GENERATE_UPDATE_GET
+
+  void updateEverything(const Context &ctx) const {
+    updateExportSet(ctx);
+    updateExportTargetList();
+    updateCompilerOptions();
+    updateCompileOptionsJson(ctx);
+    updateLinkOptionsJson(ctx);
   }
 
   virtual TargetList onBuild(const Context &ctx) const = 0;
@@ -209,8 +214,7 @@ export class Builder {
   // Do not call build() on same ctx sequentially.
   // This will cause race condition.
   virtual FutureList build(const Context &ctx) const {
-    updateCompileOptionsJson(ctx);
-    updateLinkOptionsJson(ctx);
+    updateEverything(ctx);
     const auto targetList = onBuild(ctx);
     const auto &target = targetList.getTarget();
     BuilderContext builderCtx{ctx, getCompilerOptions()};

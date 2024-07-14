@@ -7,15 +7,15 @@ import std;
 namespace makeDotCpp {
 export class ThreadPool {
  public:
-  defException(IsTerminated, (const std::string& when),
-               "thread pool is terminating when " + when);
+  DEF_EXCEPTION(IsTerminated, (const std::string& when),
+                "thread pool is terminating when " + when);
 
   using RetType = std::any;
   using Func = RetType(ThreadPool&);
   using Task = std::packaged_task<Func>;
 
  private:
-  chainVar(std::size_t, threadNum, setSize);
+  CHAIN_VAR(std::size_t, threadNum, setSize);
 
  private:
   std::vector<std::thread> threadList;

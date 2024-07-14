@@ -16,7 +16,7 @@ export struct Target {
   Target(Target &&) = delete;
   virtual ~Target() = default;
 
-  virtual Path getOutput(BuilderContext &ctx) const = 0;
+  virtual Path getOutput(const CtxWrapper &ctx) const = 0;
   virtual std::optional<Ref<Node>> build(BuilderContext &ctx) const = 0;
 };
 
@@ -43,29 +43,17 @@ struct CachedTarget : public T {
 };
 
 export struct : public Target {
-  Path getOutput(BuilderContext &ctx) const override { return Path(); }
+  Path getOutput(const CtxWrapper &ctx) const override { return Path(); }
   std::optional<Ref<Node>> build(BuilderContext &ctx) const override {
     return std::nullopt;
   }
 } emptyTarget;
 
-export struct CustomTarget : public Target {
-  Path getOutput(BuilderContext &ctx) const override {
-    return getOutput(static_cast<VFSContext &>(ctx));
-  }
-
-  std::optional<Ref<Node>> build(BuilderContext &ctx) const override {
-    return build(static_cast<VFSContext &>(ctx));
-  }
-
-  virtual Path getOutput(VFSContext &ctx) const = 0;
-  virtual std::optional<Ref<Node>> build(VFSContext &ctx) const = 0;
-};
+using ModuleMap = std::unordered_map<std::string, Path>;
 
 export struct ModuleTarget : public Target {
   virtual const std::string &getName() const = 0;
-  virtual std::unordered_map<std::string, Path> getModuleMap(
-      BuilderContext &ctx) const = 0;
+  virtual ModuleMap getModuleMap(const CtxWrapper &ctx) const = 0;
 };
 
 export template <class T = Target>
@@ -79,11 +67,13 @@ struct Deps {
       const auto &nodeOpt = dep.get().build(ctx);
       if (nodeOpt.has_value()) nodeList.emplace_back(nodeOpt.value());
     }
-    auto outputList =
-        targetDeps | std::views::transform([&](const auto &target) {
-          return target.get().getOutput(ctx);
-        });
-    return std::pair{nodeList, outputList};
+    return nodeList;
+  }
+
+  auto getDepsOutput(BuilderContext &ctx) const {
+    return targetDeps | std::views::transform([&](const auto &target) {
+             return target.get().getOutput(ctx);
+           });
   }
 
  public:
@@ -113,23 +103,22 @@ export struct FilesDeps {
   void dependOn(const Path &path) { filesDeps.emplace_back(path); }
 };
 
-export defException(CyclicModuleDependency,
-                    (ranges::range<const ModuleTarget *> auto &&visited),
-                    "detected cyclic module dependency: " +
-                        (visited |
-                         std::views::transform([](auto *target) -> std::string {
-                           return target->getName() + ' ';
-                         }) |
-                         std::views::join | ranges::to<std::string>()));
+export DEF_EXCEPTION(
+    CyclicModuleDependency,
+    (ranges::range<const ModuleTarget *> auto &&visited),
+    "detected cyclic module dependency: " +
+        (visited | std::views::transform([](auto *target) -> std::string {
+           return target->getName() + ' ';
+         }) |
+         std::views::join | ranges::to<std::string>()));
 
 export struct UnitDeps : public Deps<ModuleTarget>, public FilesDeps {
  public:
  protected:
   using FilesDeps::FilesDeps;
 
-  std::unordered_map<std::string, Path> getModuleMap(
-      std::unordered_set<const ModuleTarget *> visited,
-      BuilderContext &ctx) const {
+  ModuleMap getModuleMap(std::unordered_set<const ModuleTarget *> visited,
+                         const CtxWrapper &ctx) const {
     std::unordered_map<std::string, Path> map;
     for (auto &mod : targetDeps) {
       const auto &pcm = mod.get();
@@ -143,16 +132,16 @@ export struct UnitDeps : public Deps<ModuleTarget>, public FilesDeps {
   }
 
  public:
-  std::unordered_map<std::string, Path> getModuleMap(
-      BuilderContext &ctx) const {
+  ModuleMap getModuleMap(const CtxWrapper &ctx) const {
     std::unordered_set<const ModuleTarget *> visited;
     return getModuleMap(visited, ctx);
   }
 
   std::optional<NodeList> buildNodeList(BuilderContext &ctx,
                                         const Path &output) const {
-    const auto [nodeList, outputList] = Deps::buildNodeList(ctx);
-    return ctx.isNeedUpdate(output, concat<Path>(filesDeps, outputList))
+    const auto nodeList = Deps::buildNodeList(ctx);
+    const auto depsOutput = Deps::getDepsOutput(ctx);
+    return ctx.isNeedUpdate(output, concat<Path>(filesDeps, depsOutput))
                ? std::make_optional(nodeList)
                : std::nullopt;
   }
@@ -176,12 +165,11 @@ export struct PCMTarget : public UnitDeps, public CachedTarget<ModuleTarget> {
 
   const Path &getInput() const { return input; }
 
-  Path getOutput(BuilderContext &ctx) const override {
+  Path getOutput(const CtxWrapper &ctx) const override {
     return ctx.pcmPath() / output;
   };
 
-  std::unordered_map<std::string, Path> getModuleMap(
-      BuilderContext &ctx) const override {
+  ModuleMap getModuleMap(const CtxWrapper &ctx) const override {
     return UnitDeps::getModuleMap(ctx);
   }
 
@@ -211,7 +199,7 @@ export struct ObjTarget : public CachedTarget<> {
 
     const Path &getInput() const { return input; }
 
-    Path getOutput(BuilderContext &ctx) const override {
+    Path getOutput(const CtxWrapper &ctx) const override {
       return parent.getOutput(ctx);
     };
 
@@ -240,7 +228,7 @@ export struct ObjTarget : public CachedTarget<> {
       : internal(std::in_place_type<NotModule>, input, *this, includeDeps),
         output(output) {}
 
-  Path getOutput(BuilderContext &ctx) const override {
+  Path getOutput(const CtxWrapper &ctx) const override {
     return ctx.objPath() / output;
   };
 

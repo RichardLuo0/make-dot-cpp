@@ -4,7 +4,6 @@ import :Targets;
 import :Builder;
 import :BuilderContext;
 import :ObjBuilder;
-import :Export;
 import std;
 import makeDotCpp;
 
@@ -25,15 +24,16 @@ export struct ExeTarget : public CachedTarget<>,
     return ctx.output / name += EXE_POSTFIX;
   }
 
-  Path getOutput(BuilderContext &ctx) const override {
+  Path getOutput(const CtxWrapper &ctx) const override {
     return ExeTarget::getOutput(ctx.ctx, name);
   }
 
   std::optional<Ref<Node>> onBuild(BuilderContext &ctx) const override {
-    const auto [nodeList, objView] = Deps::buildNodeList(ctx);
+    const auto nodeList = Deps::buildNodeList(ctx);
+    const auto depsOutput = Deps::getDepsOutput(ctx);
     const Path output = getOutput(ctx);
-    if (!objView.empty() && ctx.isNeedUpdate(output, objView)) {
-      return ctx.link(objView, output, nodeList);
+    if (!depsOutput.empty() && ctx.isNeedUpdate(output, depsOutput)) {
+      return ctx.link(depsOutput, output, nodeList);
     }
     return std::nullopt;
   }

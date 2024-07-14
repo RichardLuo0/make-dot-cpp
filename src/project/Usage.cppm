@@ -15,16 +15,16 @@ import boost.dll;
 #include "alias.hpp"
 
 namespace makeDotCpp {
-export using ExportSet = std::unordered_set<std::shared_ptr<Export>>;
+export using ExFSet = std::unordered_set<std::shared_ptr<ExportFactory>>;
 
 export struct Usage {
  public:
   virtual ~Usage() = default;
 
-  // This is used if Usage does not inherit from Export.
-  virtual std::shared_ptr<Export> getExport(
+  // This is used if Usage does not inherit from ExportFactory.
+  virtual std::shared_ptr<ExportFactory> getExport(
       const Context& ctx, const std::string& name,
-      std::function<const ExportSet&(const Path&)> findBuiltPackage) const {
+      std::function<const ExFSet&(const Path&)> findBuiltPackage) const {
     return nullptr;
   };
 
@@ -38,9 +38,10 @@ export struct CustomUsage : public Usage {
   std::unordered_set<PackagePath, PackagePath::Hash> packages;
   std::variant<Path, std::vector<Path>> setupFile;
 
-  std::shared_ptr<Export> getExport(const Context& ctx, const std::string& name,
-                                    std::function<const ExportSet&(const Path&)>
-                                        findBuiltPackage) const override {
+  std::shared_ptr<ExportFactory> getExport(
+      const Context& ctx, const std::string& name,
+      std::function<const ExFSet&(const Path&)> findBuiltPackage)
+      const override {
     LibBuilder builder(name + "_export");
     builder.setShared(true).define("NO_MAIN").define("PROJECT_NAME=" + name);
     std::visit(
@@ -60,8 +61,9 @@ export struct CustomUsage : public Usage {
     auto result = builder.build(pCtx);
     result.get();
     boost::dll::shared_library lib(builder.getOutput(pCtx).generic_string());
-    auto getExport = lib.get<std::shared_ptr<Export>()>("getExport");
-    return getExport();
+    auto getExportFactory =
+        lib.get<std::shared_ptr<ExportFactory>()>("getExportFactory");
+    return getExportFactory();
   }
 
   const std::unordered_set<PackagePath, PackagePath::Hash>& getPackages()
@@ -74,7 +76,7 @@ export struct CustomUsage : public Usage {
                        ())
 };
 
-export struct DefaultUsage : public Export, public Usage {
+export struct DefaultUsage : public ExportFactory, public Usage {
  protected:
   struct BuiltTarget : public ModuleTarget {
    private:
@@ -87,7 +89,7 @@ export struct DefaultUsage : public Export, public Usage {
 
     const std::string& getName() const override { return name; }
 
-    Path getOutput(BuilderContext& ctx) const override { return output; };
+    Path getOutput(const CtxWrapper& ctx) const override { return output; };
 
    protected:
     std::optional<Ref<DepGraph::Node>> build(
@@ -96,9 +98,50 @@ export struct DefaultUsage : public Export, public Usage {
     }
 
     std::unordered_map<std::string, Path> getModuleMap(
-        BuilderContext& ctx) const override {
+        const CtxWrapper& ctx) const override {
       return std::unordered_map<std::string, Path>();
     }
+  };
+
+  struct UsageExport : public Export {
+   private:
+    std::optional<ProjectFmtPath> pcmPath;
+    std::string compileOption;
+    std::string linkOption;
+    mutable std::unordered_map<std::string, BuiltTarget> cache;
+
+   public:
+    UsageExport(std::optional<ProjectFmtPath> pcmPath,
+                std::string compileOption, std::string linkOption)
+        : pcmPath(pcmPath),
+          compileOption(compileOption),
+          linkOption(linkOption) {}
+
+    std::string getCompileOption() const override { return compileOption; }
+
+    std::string getLinkOption() const override { return linkOption; }
+
+    std::optional<Ref<const ModuleTarget>> findPCM(
+        const std::string& moduleName) const override {
+      if (!pcmPath.has_value()) return std::nullopt;
+      const auto it = cache.find(moduleName);
+      if (it != cache.end())
+        return it->second;
+      else {
+        auto modulePath =
+            pcmPath.value() / (replace(moduleName, ':', '-') + ".pcm");
+        if (!fs::exists(modulePath)) return std::nullopt;
+        return cache
+            .emplace(std::piecewise_construct,
+                     std::forward_as_tuple(moduleName),
+                     std::forward_as_tuple(moduleName, modulePath))
+            .first->second;
+      }
+    };
+  };
+
+  std::shared_ptr<Export> onCreate(const Context& ctx) const override {
+    return nullptr;
   };
 
  public:
@@ -108,7 +151,12 @@ export struct DefaultUsage : public Export, public Usage {
   std::vector<std::string> libs;
   std::unordered_set<PackagePath, PackagePath::Hash> packages;
 
-  std::string getCompileOption() const override {
+  std::shared_ptr<Export> create(const Context& ctx) const override {
+    return std::make_shared<UsageExport>(pcmPath, getCompileOption(),
+                                         getLinkOption());
+  }
+
+  std::string getCompileOption() const {
     if (pcmPath.has_value())
       return "-fprebuilt-module-path=" + pcmPath.value().generic_string() +
              ' ' + compileOption;
@@ -116,34 +164,13 @@ export struct DefaultUsage : public Export, public Usage {
       return compileOption;
   }
 
-  std::string getLinkOption() const override {
+  std::string getLinkOption() const {
     std::string lo = linkOption;
     for (auto& lib : libs) {
       lo += " -l" + lib;
     }
     return lo;
   }
-
- private:
-  mutable std::unordered_map<std::string, BuiltTarget> cache;
-
- public:
-  std::optional<Ref<const ModuleTarget>> findPCM(
-      const std::string& moduleName) const override {
-    if (!pcmPath.has_value()) return std::nullopt;
-    const auto it = cache.find(moduleName);
-    if (it != cache.end())
-      return it->second;
-    else {
-      auto modulePath =
-          pcmPath.value() / (replace(moduleName, ':', '-') + ".pcm");
-      if (!fs::exists(modulePath)) return std::nullopt;
-      return cache
-          .emplace(std::piecewise_construct, std::forward_as_tuple(moduleName),
-                   std::forward_as_tuple(moduleName, modulePath))
-          .first->second;
-    }
-  };
 
   const std::unordered_set<PackagePath, PackagePath::Hash>& getPackages()
       const override {

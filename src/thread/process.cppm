@@ -9,8 +9,8 @@ import std;
 
 namespace makeDotCpp {
 namespace process {
-export defException(ProcessError, (const std::error_code &ec),
-                    "process error: " + ec.message());
+export DEF_EXCEPTION(ProcessError, (const std::error_code &ec),
+                     "process error: " + ec.message());
 
 export struct Result {
   std::string command;

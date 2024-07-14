@@ -15,15 +15,15 @@ import boost.json;
 
 using namespace makeDotCpp;
 
-defException(CyclicPackageDependency, (ranges::range<Path> auto&& visited),
-             "detected cyclic package dependency: " +
-                 (visited |
-                  std::views::transform([](auto& path) -> std::string {
-                    return path.generic_string() + ' ';
-                  }) |
-                  std::views::join | ranges::to<std::string>()));
-defException(PackageNotBuilt, (const std::string& name),
-             name + " is not built");
+DEF_EXCEPTION(CyclicPackageDependency, (ranges::range<Path> auto&& visited),
+              "detected cyclic package dependency: " +
+                  (visited |
+                   std::views::transform([](auto& path) -> std::string {
+                     return path.generic_string() + ' ';
+                   }) |
+                   std::views::join | ranges::to<std::string>()));
+DEF_EXCEPTION(PackageNotBuilt, (const std::string& name),
+              name + " is not built");
 
 class BuildFileProject {
  private:
@@ -32,11 +32,11 @@ class BuildFileProject {
   const Path packagesPath;
   std::shared_ptr<Compiler> compiler = std::make_shared<Clang>();
   LibBuilder builder{"build"};
-  api::PackageExports packageExports;
+  api::Packages packageExports;
 
   std::unordered_map<Path, const ProjectDesc> projectDescCache;
   std::unordered_set<Path> builtExportPackageCache;
-  std::unordered_map<Path, const ExportSet> builtPackageCache;
+  std::unordered_map<Path, const ExFSet> builtPackageCache;
 
  public:
   BuildFileProject(const Path& projectJsonPath, const Path& packagesPath)
@@ -110,10 +110,10 @@ class BuildFileProject {
                            std::placeholders::_1)));
   }
 
-  const ExportSet& findBuiltPackage(const Path& path) {
+  const ExFSet& findBuiltPackage(const Path& path) {
     std::unordered_set<Path> visited;
-    std::function<const ExportSet&(const Path& path)> findBuiltPackageR =
-        [&](const Path& path) -> const ExportSet& {
+    std::function<const ExFSet&(const Path& path)> findBuiltPackageR =
+        [&](const Path& path) -> const ExFSet& {
       const auto projectJsonPath =
           fs::canonical(fs::is_directory(path) ? path / "project.json" : path);
       auto it = builtPackageCache.find(projectJsonPath);
@@ -122,9 +122,10 @@ class BuildFileProject {
         throw CyclicPackageDependency(visited);
       visited.emplace(projectJsonPath);
       const auto& projectDesc = getProjectDesc(projectJsonPath);
-      const auto ex = std::dynamic_pointer_cast<Export>(projectDesc.usage);
+      const auto ex =
+          std::dynamic_pointer_cast<ExportFactory>(projectDesc.usage);
       if (ex == nullptr) throw PackageNotBuilt(projectDesc.name);
-      ExportSet exSet{std::move(ex)};
+      ExFSet exSet{std::move(ex)};
       for (auto& path : projectDesc.getUsagePackages()) {
         auto& packages = findBuiltPackageR(path);
         exSet.insert(packages.begin(), packages.end());

@@ -15,23 +15,34 @@ import makeDotCpp.utils;
 #include "macro.hpp"
 
 namespace makeDotCpp {
-export defException(FileNotFound, (const Path &file),
-                    "file not found: " + file.generic_string());
-export defException(CompileError, (), "compile error");
+export DEF_EXCEPTION(FileNotFound, (const Path &file),
+                     "file not found: " + file.generic_string());
+export DEF_EXCEPTION(CompileError, (), "compile error");
 
 export struct CompilerOptions {
-  std::string compileOptions;
-  std::string linkOptions;
+  std::string compileOption;
+  std::string linkOption;
 };
 
-export struct VFSContext {
+export struct CtxWrapper {
+ public:
+  const Context &ctx;
+
+  CtxWrapper(CLRef<Context> ctx) : ctx(ctx) {}
+
+  Path outputPath() const { return ctx.output; }
+
+  Path pcmPath() const { return ctx.pcmPath(); }
+
+  Path objPath() const { return ctx.objPath(); }
+};
+
+export struct VFSContext : public CtxWrapper {
  protected:
   std::unordered_set<Path> vfs;
 
  public:
-  const Context &ctx;
-
-  VFSContext(CLRef<Context> ctx) : ctx(ctx) {}
+  using CtxWrapper::CtxWrapper;
 
   bool exists(Path path) const {
     return vfs.contains(path) ? true : fs::exists(path);
@@ -57,12 +68,6 @@ export struct VFSContext {
   }
 
   void addFile(const Path &path) { vfs.emplace(path); }
-
-  Path outputPath() const { return ctx.output; }
-
-  Path pcmPath() const { return ctx.pcmPath(); }
-
-  Path objPath() const { return ctx.objPath(); }
 };
 
 export struct BuilderContext : public VFSContext {
@@ -103,7 +108,7 @@ export struct BuilderContext : public VFSContext {
       const Path &input, const std::unordered_map<std::string, Path> &moduleMap,
       const Path &output) const {
     return compiler->compileCommand(input, output, ctx.debug, moduleMap,
-                                    compilerOptions.compileOptions);
+                                    compilerOptions.compileOption);
   }
 
 #define GENERATE_COMPILE_METHOD(NAME, INPUT, CAPTURE, LOGNAME, FUNC)        \
@@ -129,22 +134,22 @@ export struct BuilderContext : public VFSContext {
       (compiler = this->compiler, compilerOptions = this->compilerOptions),
       "Compiling pcm",
       compiler->compilePCM(input, output, moduleMap,
-                           compilerOptions.compileOptions));
+                           compilerOptions.compileOption));
   GENERATE_COMPILE_METHOD(
       compile,
       (const Path &input,
        const std::unordered_map<std::string, Path> &moduleMap),
       (&ctx = this->ctx, compiler = this->compiler,
-       compileOptions = this->compilerOptions.compileOptions),
+       compileOption = this->compilerOptions.compileOption),
       "Compiling obj",
-      compiler->compile(input, output, ctx.debug, moduleMap, compileOptions));
+      compiler->compile(input, output, ctx.debug, moduleMap, compileOption));
   GENERATE_COMPILE_METHOD(link, (ranges::range<Path> auto &&objList),
                           (&ctx = this->ctx, compiler = this->compiler,
                            objList = objList | ranges::to<std::vector<Path>>(),
-                           linkOptions = this->compilerOptions.linkOptions),
+                           linkOption = this->compilerOptions.linkOption),
                           "Linking",
                           compiler->link(objList, output, ctx.debug,
-                                         linkOptions));
+                                         linkOption));
   GENERATE_COMPILE_METHOD(archive, (ranges::range<Path> auto &&objList),
                           (compiler = this->compiler,
                            objList = objList | ranges::to<std::vector<Path>>()),
@@ -152,10 +157,10 @@ export struct BuilderContext : public VFSContext {
   GENERATE_COMPILE_METHOD(createSharedLib, (ranges::range<Path> auto &&objList),
                           (compiler = this->compiler,
                            objList = objList | ranges::to<std::vector<Path>>(),
-                           linkOptions = this->compilerOptions.linkOptions),
+                           linkOption = this->compilerOptions.linkOption),
                           "Archiving",
                           compiler->createSharedLib(objList, output,
-                                                    linkOptions));
+                                                    linkOption));
 #undef GENERATE_COMPILE_METHOD
 };
 
@@ -164,9 +169,9 @@ export struct BuilderContextChild : public BuilderContext {
   BuilderContext &parent;
 
  public:
-  BuilderContextChild(LRef<BuilderContext> parent, CLRef<Context> ctx,
+  BuilderContextChild(LRef<BuilderContext> parent,
                       const CompilerOptions &compilerOptions)
-      : BuilderContext(ctx, compilerOptions), parent(parent) {
+      : BuilderContext(parent.ctx, compilerOptions), parent(parent) {
     vfs.merge(parent.vfs);
     id = parent.id;
   }

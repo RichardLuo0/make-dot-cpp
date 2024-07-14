@@ -4,15 +4,15 @@ import std;
 #include "alias.hpp"
 
 namespace makeDotCpp {
-struct Export;
+struct ExportFactory;
 
 namespace api {
-export using PackageExports =
-    std::unordered_map<std::string, std::shared_ptr<Export>>;
+export using Packages =
+    std::unordered_map<std::string, std::shared_ptr<ExportFactory>>;
 
 export struct ProjectContext {
   const std::string name;
-  const PackageExports &packageExports;
+  const Packages &packageExports;
   int argc;
   const char **argv;
 };

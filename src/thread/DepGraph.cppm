@@ -57,7 +57,7 @@ export class DepGraph {
 
    public:
     Node(DepGraph& graph, const std::function<Func>& callable)
-        : task([&, callable](ThreadPool& threadPool) {
+        : task([&, callable](ThreadPool&) {
             auto ret = callable(graph);
             std::lock_guard lock(graph.mutex);
             state = Finished;

@@ -71,34 +71,35 @@ export class Project {
  private:
   Context ctx;
 
-  chainVar(BuildFunc, buildFunc, [](const Context &) {}, setBuild);
-  chainVar(
+  CHAIN_VAR(BuildFunc, buildFunc, [](const Context &) {}, setBuild);
+  CHAIN_VAR(
       InstallFunc, installFunc,
       [](const Context &) {
         // TODO default install location
       },
       setInstall);
 
-  chainMethod(setName, std::string, name) { ctx.name = name; }
-  chainMethod(to, Path, path) { ctx.output = fs::weakly_canonical(path); }
-  chainMethod(installTo, Path, path) {
+  CHAIN_METHOD(to, Path, path) { ctx.output = fs::weakly_canonical(path); }
+  CHAIN_METHOD(installTo, Path, path) {
     ctx.install = fs::weakly_canonical(path);
   }
-  chainMethod(setDebug, bool, debug) { ctx.debug = debug; }
-  chainMethod(setThreadPoolSize, std::size_t, size) {
+  CHAIN_METHOD(setDebug, bool, debug) { ctx.debug = debug; }
+  CHAIN_METHOD(setThreadPoolSize, std::size_t, size) {
     ctx.threadPool.setSize(size);
   }
-  chainMethod(setRelativePCMPath, std::string, path) {
+  CHAIN_METHOD(setRelativePCMPath, std::string, path) {
     ctx.relativePCMPath = path;
   }
-  chainMethod(setRelativeObjPath, std::string, path) {
+  CHAIN_METHOD(setRelativeObjPath, std::string, path) {
     ctx.relativeObjPath = path;
   }
-  chainMethod(setCompiler, std::shared_ptr<const Compiler>, compiler) {
+  CHAIN_METHOD(setCompiler, std::shared_ptr<const Compiler>, compiler) {
     ctx.compiler = compiler;
   }
 
  public:
+  Project(const std::string &name) : ctx{name} {}
+
   template <class C>
     requires std::is_base_of_v<Compiler, C>
   auto &setCompiler(const C &compiler) {
