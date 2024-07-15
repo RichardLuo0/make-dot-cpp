@@ -3,7 +3,7 @@ import :common;
 import :BuilderContext;
 import std;
 import makeDotCpp;
-import makeDotCpp.project.api;
+import makeDotCpp.dll.api;
 import makeDotCpp.utils;
 
 #include "alias.hpp"

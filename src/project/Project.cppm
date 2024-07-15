@@ -52,8 +52,8 @@ export class Project {
 
     Path getPackagesPath() {
       const auto vv = vm["packages"];
-      return vv.empty() ? fs::weakly_canonical(std::getenv("CXX_PACKAGES"))
-                        : vv.as<Path>();
+      return fs::canonical(vv.empty() ? Path(std::getenv("CXX_PACKAGES"))
+                                      : vv.as<Path>());
     }
 
     void printHelp() const { std::cout << od << std::endl; }

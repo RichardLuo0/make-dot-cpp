@@ -1,6 +1,6 @@
 import std;
 import makeDotCpp;
-import makeDotCpp.project.api;
+import makeDotCpp.dll.api;
 import makeDotCpp.project.desc;
 import makeDotCpp.compiler;
 import makeDotCpp.compiler.Clang;
@@ -30,8 +30,8 @@ class BuildFileProject {
   const ProjectDesc projectDesc;
   Context ctx;
   const Path packagesPath;
-  std::shared_ptr<Compiler> compiler = std::make_shared<Clang>();
-  LibBuilder builder{"build"};
+  std::shared_ptr<Compiler> compiler;
+  LibBuilder builder;
   api::Packages packageExports;
 
   std::unordered_map<Path, const ProjectDesc> projectDescCache;
@@ -39,10 +39,12 @@ class BuildFileProject {
   std::unordered_map<Path, const ExFSet> builtPackageCache;
 
  public:
-  BuildFileProject(const Path& projectJsonPath, const Path& packagesPath)
+  BuildFileProject(const Path& projectJsonPath, const Path& packagesPath,
+                   const std::shared_ptr<Compiler>& compiler)
       : projectDesc(ProjectDesc::create(projectJsonPath, packagesPath)),
         ctx(projectDesc.name + "_build", fs::weakly_canonical(".build")),
         packagesPath(packagesPath),
+        compiler(compiler),
         builder(projectDesc.name + "_build") {
     compiler->addOption("-march=native -std=c++20 -Wall");
 #ifdef _WIN32
@@ -142,8 +144,8 @@ namespace po = boost::program_options;
 
 Path getPackagesPath(const po::variables_map& vm) {
   const auto vv = vm["packages"];
-  return vv.empty() ? fs::weakly_canonical(std::getenv("CXX_PACKAGES"))
-                    : vv.as<Path>();
+  return fs::canonical(vv.empty() ? Path(std::getenv("CXX_PACKAGES"))
+                                  : vv.as<Path>());
 }
 
 void generateCompileCommands(
@@ -164,13 +166,30 @@ void generateCompileCommands(
   std::cout << "\033[0;32mBuilt " << ccPath << "\033[0m" << std::endl;
 }
 
+DEF_EXCEPTION(UnknownCompiler, (const std::string& name),
+              "unknown compiler: " + name);
+
+std::shared_ptr<Compiler> getCompiler(const std::string& name,
+                                      const Path& packagesPath) {
+  if (name == "clang") return std::make_shared<Clang>();
+  try {
+    auto lib = std::make_shared<boost::dll::shared_library>(
+        (packagesPath / ".global" / "compiler" / name += SHLIB_POSTFIX)
+            .generic_string());
+    return {lib, &lib->get<Compiler&>("compiler")};
+  } catch (const std::exception& e) {
+    throw UnknownCompiler(name);
+  }
+}
+
 int main(int argc, const char** argv) {
   po::options_description od;
   po::variables_map vm;
   od.add_options()
       .operator()("help,h", "Display help message.")
       .operator()("no-build", "Do not build the project.")
-      .operator()("compile-commands", "Generate compile_commands.json");
+      .operator()("compile-commands", "Generate compile_commands.json")
+      .operator()("compiler", po::value<std::string>(), "The compiler to use.");
   po::store(po::command_line_parser(argc, argv)
                 .options(od)
                 .allow_unregistered()
@@ -181,7 +200,12 @@ int main(int argc, const char** argv) {
     std::cout << od << std::endl;
   }
 
-  BuildFileProject project(fs::canonical("project.json"), getPackagesPath(vm));
+  const Path packagesPath = getPackagesPath(vm);
+  auto& vv = vm["compiler"];
+  const auto compiler =
+      getCompiler(vv.empty() ? "clang" : vv.as<std::string>(), packagesPath);
+  BuildFileProject project(fs::canonical("project.json"), packagesPath,
+                           compiler);
   try {
     auto future = project.build();
     future.get();
@@ -189,12 +213,11 @@ int main(int argc, const char** argv) {
     std::cout << "\033[0;32mBuilt " << output << "\033[0m" << std::endl;
 
     if (vm.contains("no-build")) return 0;
+
     boost::dll::shared_library lib(output.generic_string());
     auto build = lib.get<api::Build>("build");
-    // auto getCompileCommand =
-    //     lib.get<api::GetCompileCommand>("GetCompileCommand");
-    int ret =
-        build({project.getName(), project.getPackageExports(), argc, argv});
+    int ret = build(
+        {project.getName(), project.getPackageExports(), compiler, argc, argv});
     if (vm.contains("compile-commands"))
       generateCompileCommands(project.getContext(), api::compileCommands);
     return ret;

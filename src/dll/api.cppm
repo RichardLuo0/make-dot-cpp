@@ -1,10 +1,11 @@
-export module makeDotCpp.project.api;
+export module makeDotCpp.dll.api;
 import std;
 
 #include "alias.hpp"
 
 namespace makeDotCpp {
 struct ExportFactory;
+struct Compiler;
 
 namespace api {
 export using Packages =
@@ -13,11 +14,10 @@ export using Packages =
 export struct ProjectContext {
   const std::string name;
   const Packages &packageExports;
+  const std::shared_ptr<Compiler> compiler;
   int argc;
   const char **argv;
 };
-
-export using Build = int(const ProjectContext &pCtx);
 
 export struct CompileCommand {
   Path input;
@@ -26,5 +26,16 @@ export struct CompileCommand {
 };
 
 export std::deque<CompileCommand> compileCommands;
+
+// In build.cpp
+export using Build = int(const ProjectContext &pCtx);
+
+// In library export
+// SomeExportFactory someExportFactory;
+// extern "C" ExportFactory& exportFactory = someExportFactory;
+
+// In compiler dll
+// SomeCompiler someCompiler;
+// extern "C" Compiler& compiler = someCompiler;
 }  // namespace api
 }  // namespace makeDotCpp

@@ -1,8 +1,8 @@
 import std;
 import makeDotCpp;
 import makeDotCpp.project;
-import makeDotCpp.project.api;
-import makeDotCpp.compiler.Clang;
+import makeDotCpp.dll.api;
+import makeDotCpp.compiler;
 import makeDotCpp.fileProvider.Glob;
 import makeDotCpp.builder;
 
@@ -12,8 +12,7 @@ using namespace makeDotCpp;
 using namespace api;
 
 extern "C" int build(const ProjectContext &ctx) {
-  auto compiler = std::make_shared<Clang>();
-  compiler->addOption("-march=native -O3 -std=c++20 -Wall -Wextra")
+  ctx.compiler->addOption("-march=native -O3 -std=c++20 -Wall -Wextra")
       .addOption("-Wno-missing-field-initializers")
       // https://github.com/llvm/llvm-project/issues/75057;
       .addOption("-Wno-deprecated-declarations");
@@ -33,7 +32,7 @@ extern "C" int build(const ProjectContext &ctx) {
   builder->dependOn(libBuilder);
 
   Project(ctx.name)
-      .setCompiler(compiler)
+      .setCompiler(ctx.compiler)
       .setBuild([&](const Context &ctx) {
         auto future = builder->build(ctx);
         future.get();

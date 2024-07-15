@@ -60,10 +60,9 @@ export struct CustomUsage : public Usage {
     Context pCtx{name, ctx.output / "packages" / name};
     auto result = builder.build(pCtx);
     result.get();
-    boost::dll::shared_library lib(builder.getOutput(pCtx).generic_string());
-    auto getExportFactory =
-        lib.get<std::shared_ptr<ExportFactory>()>("getExportFactory");
-    return getExportFactory();
+    auto lib = std::make_shared<boost::dll::shared_library>(
+        builder.getOutput(pCtx).generic_string());
+    return {lib, &lib->get<ExportFactory&>("exportFactory")};
   }
 
   const std::unordered_set<PackagePath, PackagePath::Hash>& getPackages()
