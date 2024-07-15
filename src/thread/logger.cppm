@@ -15,9 +15,10 @@ export void flush() {
 
 export void info(const std::string& msg) { out += msg + '\n'; }
 
-export std::string reset = "\033[0m";
+export const std::string reset = "\033[0m";
 
-#define GENERATE_COLOR(NAME, CODE) export std::string NAME = "\033[0;" #CODE;
+#define GENERATE_COLOR(NAME, CODE) \
+  export const std::string NAME = "\033[0;" #CODE;
 
 GENERATE_COLOR(defaultColor, 39m);
 GENERATE_COLOR(black, 30m);

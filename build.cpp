@@ -5,11 +5,13 @@ import makeDotCpp.dll.api;
 import makeDotCpp.compiler;
 import makeDotCpp.fileProvider.Glob;
 import makeDotCpp.builder;
+import makeDotCpp.thread.logger;
 
 #include "src/utils/alias.hpp"
 
 using namespace makeDotCpp;
 using namespace api;
+using namespace logger;
 
 extern "C" int build(const ProjectContext &ctx) {
   ctx.compiler->addOption("-march=native -O3 -std=c++20 -Wall -Wextra")
@@ -36,7 +38,7 @@ extern "C" int build(const ProjectContext &ctx) {
       .setBuild([&](const Context &ctx) {
         auto future = builder->build(ctx);
         future.get();
-        std::cout << "\033[0;32mDone\033[0m" << std::endl;
+        std::cout << green << "Done" << reset << std::endl;
       })
       .setInstall([&](const Context &ctx) {
         if (ctx.install.empty()) {
@@ -58,6 +60,8 @@ extern "C" int build(const ProjectContext &ctx) {
         }
 
         { Project::updateFile("project.json", ctx.install); }
+
+        std::cout << green << "Installed " << ctx.name << reset << std::endl;
       })
       .to("build-make-dot-cpp")
       .run(ctx.argc, ctx.argv);
