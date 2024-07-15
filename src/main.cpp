@@ -6,6 +6,7 @@ import makeDotCpp.compiler;
 import makeDotCpp.compiler.Clang;
 import makeDotCpp.builder;
 import makeDotCpp.utils;
+import makeDotCpp.thread.logger;
 import boost.dll;
 import boost.program_options;
 import boost.json;
@@ -163,7 +164,8 @@ void generateCompileCommands(
   std::ofstream os(ccPath);
   os.exceptions(std::ifstream::failbit);
   os << array;
-  std::cout << "\033[0;32mBuilt " << ccPath << "\033[0m" << std::endl;
+  std::cout << logger::green << "Built " << ccPath << logger::reset
+            << std::endl;
 }
 
 DEF_EXCEPTION(UnknownCompiler, (const std::string& name),
@@ -210,7 +212,8 @@ int main(int argc, const char** argv) {
     auto future = project.build();
     future.get();
     const auto output = project.getOutput();
-    std::cout << "\033[0;32mBuilt " << output << "\033[0m" << std::endl;
+    std::cout << logger::green << "Built " << output << logger::reset
+              << std::endl;
 
     if (vm.contains("no-build")) return 0;
 
@@ -222,7 +225,8 @@ int main(int argc, const char** argv) {
       generateCompileCommands(project.getContext(), api::compileCommands);
     return ret;
   } catch (const std::exception& e) {
-    std::cerr << "\033[0;31mError: " << e.what() << "\033[0m" << std::endl;
+    std::cerr << logger::red << "Error: " << e.what() << logger::reset
+              << std::endl;
     return 1;
   }
 }

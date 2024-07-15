@@ -5,6 +5,7 @@ import makeDotCpp.dll.api;
 import makeDotCpp.compiler;
 import makeDotCpp.fileProvider.Glob;
 import makeDotCpp.builder;
+import makeDotCpp.thread.logger;
 
 using namespace makeDotCpp;
 using namespace api;
@@ -20,14 +21,8 @@ extern "C" int build(const ProjectContext &ctx) {
   Project(ctx.name)
       .setCompiler(ctx.compiler)
       .setBuild([&](const Context &ctx) {
-        try {
-          builder.build(ctx).get();
-          std::cout << "\033[0;32mDone\033[0m" << std::endl;
-        } catch (const std::exception &e) {
-          std::cout << "\033[0;31merror: " << e.what() << "\033[0m"
-                    << std::endl;
-          throw e;
-        }
+        builder.build(ctx).get();
+        std::cout << green << "Done" << reset << std::endl;
       })
       .run(ctx.argc, ctx.argv);
   return 0;
