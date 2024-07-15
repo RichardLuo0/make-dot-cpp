@@ -41,7 +41,7 @@ export class Clang : public Compiler {
 
 #define GENERATE_COMPILE_METHOD(NAME, ARGS, PASS_ARGS) \
   process::Result NAME ARGS const override {           \
-    this->ensureParentExists(output);                  \
+    ensureParentExists(output);                        \
     return process::run(NAME##Command PASS_ARGS);      \
   }                                                    \
   std::string NAME##Command ARGS const override

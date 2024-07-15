@@ -29,7 +29,8 @@ export class Project {
           .operator()("installPath,i", po::value<Path>(),
                       "Installation directory.")
           .operator()("packages,p", po::value<Path>(), "Packages directory.")
-          .operator()("debug,g", "Enable debug.");
+          .operator()("debug,g", "Enable debug.")
+          .operator()("verbose,v", "Enable verbose output.");
     }
 
     void add(const std::string &name, const std::string &desc) {
@@ -97,6 +98,8 @@ export class Project {
     ctx.compiler = compiler;
   }
 
+  CHAIN_METHOD(setVerbose, bool, verbose) { ctx.verbose = verbose; }
+
  public:
   Project(const std::string &name) : ctx{name} {}
 
@@ -126,22 +129,29 @@ export class Project {
   void clean() { fs::remove_all(ctx.output); }
 
   void setUpWith(const OptionParser &op) {
-#define APPLY_IF_HAS(KEY, TYPE, FUNC) \
-  {                                   \
-    auto vv = op[KEY];                \
-    if (!vv.empty()) {                \
-      auto value = vv.as<TYPE>();     \
-      FUNC;                           \
-    }                                 \
+#define APPLY_IF_HAS_VALUE(KEY, TYPE, FUNC) \
+  {                                         \
+    auto vv = op[KEY];                      \
+    if (!vv.empty()) {                      \
+      auto value = vv.as<TYPE>();           \
+      FUNC;                                 \
+    }                                       \
   }
 
-    APPLY_IF_HAS("output", Path, to(value));
-    APPLY_IF_HAS("installPath", Path, installTo(value));
-#undef APPLY_IF_HAS
+    APPLY_IF_HAS_VALUE("output", Path, to(value));
+    APPLY_IF_HAS_VALUE("installPath", Path, installTo(value));
+#undef APPLY_IF_HAS_VALUE
 
-    if (op.contains("debug")) {
-      setDebug(true);
-    }
+#define APPLY_IF_CONTAINS(KEY, FUNC) \
+  {                                  \
+    if (op.contains(KEY)) {          \
+      FUNC;                          \
+    }                                \
+  }
+
+    APPLY_IF_CONTAINS("debug", setDebug(true));
+    APPLY_IF_CONTAINS("verbose", setVerbose(true));
+#undef APPLY_IF_CONTAINS
   }
 
   void run(const OptionParser &op) {

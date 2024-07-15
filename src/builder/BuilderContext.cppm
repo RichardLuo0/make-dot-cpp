@@ -93,17 +93,6 @@ export struct BuilderContext : public VFSContext {
 
   FutureList &&takeFutureList() { return std::move(futureList); }
 
-  static int handleResult(const process::Result &&result, DepGraph &graph) {
-    logger::info(result.command);
-    if (!result.output.empty()) logger::info(result.output);
-    logger::flush();
-    if (result.status != 0) {
-      graph.terminate();
-      throw CompileError();
-    }
-    return 0;
-  }
-
   std::string compileCommand(
       const Path &input, const std::unordered_map<std::string, Path> &moduleMap,
       const Path &output) const {
@@ -118,11 +107,20 @@ export struct BuilderContext : public VFSContext {
              const Deps &deps = std::views::empty<Ref<Node>>) {             \
     addFile(output);                                                        \
     return collect(ctx.depGraph.addNode(                                    \
-        [=, id = id++, UNPACK CAPTURE](DepGraph &graph) {                   \
+        [=, id = id++, verbose = this->ctx.verbose,                         \
+         UNPACK CAPTURE](DepGraph &graph) {                                 \
           logger::info(std::format("\033[0;34m[{}] " LOGNAME ": {}\033[0m", \
                                    id, output.generic_string()));           \
           logger::flush();                                                  \
-          return handleResult(FUNC, graph);                                 \
+          const auto &result = FUNC;                                        \
+          if (verbose) logger::info(result.command);                        \
+          if (!result.output.empty()) logger::info(result.output);          \
+          logger::flush();                                                  \
+          if (result.status != 0) {                                         \
+            graph.terminate();                                              \
+            throw CompileError();                                           \
+          }                                                                 \
+          return result.status;                                             \
         },                                                                  \
         deps));                                                             \
   }
@@ -139,17 +137,16 @@ export struct BuilderContext : public VFSContext {
       compile,
       (const Path &input,
        const std::unordered_map<std::string, Path> &moduleMap),
-      (&ctx = this->ctx, compiler = this->compiler,
+      (debug = this->ctx.debug, compiler = this->compiler,
        compileOption = this->compilerOptions.compileOption),
       "Compiling obj",
-      compiler->compile(input, output, ctx.debug, moduleMap, compileOption));
+      compiler->compile(input, output, debug, moduleMap, compileOption));
   GENERATE_COMPILE_METHOD(link, (ranges::range<Path> auto &&objList),
-                          (&ctx = this->ctx, compiler = this->compiler,
+                          (debug = this->ctx.debug, compiler = this->compiler,
                            objList = objList | ranges::to<std::vector<Path>>(),
                            linkOption = this->compilerOptions.linkOption),
                           "Linking",
-                          compiler->link(objList, output, ctx.debug,
-                                         linkOption));
+                          compiler->link(objList, output, debug, linkOption));
   GENERATE_COMPILE_METHOD(archive, (ranges::range<Path> auto &&objList),
                           (compiler = this->compiler,
                            objList = objList | ranges::to<std::vector<Path>>()),

@@ -17,6 +17,8 @@ export struct Context {
   Path relativeObjPath = "obj";
   std::shared_ptr<const Compiler> compiler;
 
+  bool verbose = false;
+
   static inline ThreadPool threadPool{8};
   static inline DepGraph depGraph;
 
