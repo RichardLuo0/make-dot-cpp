@@ -16,6 +16,8 @@ import boost.json;
 
 using namespace makeDotCpp;
 
+DEF_EXCEPTION(ProjectJsonNoFound, (),
+              "project.json is not found in current location");
 DEF_EXCEPTION(CyclicPackageDependency, (ranges::range<Path> auto&& visited),
               "detected cyclic package dependency: " +
                   (visited |
@@ -208,16 +210,20 @@ int main(int argc, const char** argv) {
                 .run(),
             vm);
   po::notify(vm);
+
+  Path projectJsonPath = fs::exists("project.json") ? "project.json" : Path();
+
   if (vm.contains("help")) {
     std::cout << od << std::endl;
+    if (projectJsonPath.empty()) return 0;
   }
 
+  if (projectJsonPath.empty()) throw ProjectJsonNoFound();
   const Path packagesPath = getPackagesPath(vm);
   auto& vv = vm["compiler"];
   const auto compiler =
       getCompiler(vv.empty() ? "clang" : vv.as<std::string>(), packagesPath);
-  BuildFileProject project(fs::canonical("project.json"), packagesPath,
-                           compiler);
+  BuildFileProject project(projectJsonPath, packagesPath, compiler);
   try {
     auto future = project.build();
     future.get();
