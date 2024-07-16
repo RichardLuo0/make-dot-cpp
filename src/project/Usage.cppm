@@ -22,12 +22,12 @@ export struct Usage {
   virtual ~Usage() = default;
 
   // This is used if Usage does not inherit from ExportFactory.
-  virtual std::shared_ptr<ExportFactory> getExport(
+  virtual std::shared_ptr<ExportFactory> getExportFactory(
       [[maybe_unused]] const Context& ctx,
       [[maybe_unused]] const std::string& name,
       [[maybe_unused]] const Path& projectPath,
-      [[maybe_unused]] std::function<const ExFSet&(const Path&)>
-          findBuiltPackage) const {
+      [[maybe_unused]] std::function<const ExFSet&(const Path&)> buildPackage)
+      const {
     return nullptr;
   };
 
@@ -41,10 +41,9 @@ export struct CustomUsage : public Usage {
   std::unordered_set<PackagePath, PackagePath::Hash> packages;
   Required<std::variant<ProjectFmtPath, std::vector<ProjectFmtPath>>> setupFile;
 
-  std::shared_ptr<ExportFactory> getExport(
+  std::shared_ptr<ExportFactory> getExportFactory(
       const Context& ctx, const std::string& name, const Path& projectPath,
-      std::function<const ExFSet&(const Path&)> findBuiltPackage)
-      const override {
+      std::function<const ExFSet&(const Path&)> buildPackage) const override {
     LibBuilder builder(name);
     builder.setShared(true)
         .define("NO_MAIN")
@@ -61,15 +60,13 @@ export struct CustomUsage : public Usage {
         },
         setupFile);
     for (auto& path : devPackages) {
-      builder.dependOn(findBuiltPackage(path));
+      builder.dependOn(buildPackage(path));
     }
-    const Path output = ctx.output / "packages" / name;
-    fs::create_directories(output);
-    Context pCtx{.name = name, .output = output, .compiler = ctx.compiler};
-    auto result = builder.build(pCtx);
+    fs::create_directories(ctx.output);
+    auto result = builder.build(ctx);
     result.get();
     auto lib = std::make_shared<boost::dll::shared_library>(
-        builder.getOutput(pCtx).generic_string());
+        builder.getOutput(ctx).generic_string());
     return {lib, &lib->get<ExportFactory&>("exportFactory")};
   }
 

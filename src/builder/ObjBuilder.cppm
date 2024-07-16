@@ -50,7 +50,7 @@ export class ObjBuilder : public Builder {
       targetList.emplace_back(*obj, unit);
       objList.emplace_back(std::move(obj));
     }
-    // Create depends with modules
+    // Create depends between modules
     for (auto &pair : targetList) {
       auto &target = pair.first.get();
       const auto &unit = pair.second.get();

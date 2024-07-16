@@ -23,8 +23,6 @@ DEF_EXCEPTION(CyclicPackageDependency, (ranges::range<Path> auto&& visited),
                      return path.generic_string() + ' ';
                    }) |
                    std::views::join | ranges::to<std::string>()));
-DEF_EXCEPTION(PackageNotBuilt, (const std::string& name),
-              name + " is not built");
 
 class BuildFileProject {
  private:
@@ -66,11 +64,11 @@ class BuildFileProject {
         projectDesc.dev.buildFile);
 
     for (auto& path : projectDesc.packages) {
-      buildExportPackage(path);
+      buildLocalPackage(path);
     }
 
     for (auto& path : projectDesc.dev.packages) {
-      builder.dependOn(findBuiltPackage(path));
+      builder.dependOn(buildGlobalPackage(path));
     }
   }
 
@@ -97,7 +95,7 @@ class BuildFileProject {
     return projectDescCache.emplace(projectJsonPath, projectDesc).first->second;
   }
 
-  void buildExportPackage(const Path& path) {
+  void buildLocalPackage(const Path& path) {
     const auto projectJsonPath =
         fs::canonical(fs::is_directory(path) ? path / "project.json" : path);
     if (builtExportPackageCache.contains(projectJsonPath)) return;
@@ -105,40 +103,51 @@ class BuildFileProject {
 
     const auto& projectDesc = getProjectDesc(projectJsonPath);
     for (auto& path : projectDesc.getUsagePackages()) {
-      buildExportPackage(path);
+      buildLocalPackage(path);
     }
-    packageExports.emplace(projectDesc.name,
-                           projectDesc.getUsageExport(
-                               ctx, projectJsonPath.parent_path(),
-                               std::bind(&BuildFileProject::findBuiltPackage,
-                                         this, std::placeholders::_1)));
+    const std::string& name = projectDesc.name;
+    packageExports.emplace(
+        name, buildPackage(projectDesc, ctx.output / "packages" / name,
+                           projectJsonPath));
   }
 
-  const ExFSet& findBuiltPackage(const Path& path) {
+  const ExFSet& buildGlobalPackage(const Path& path) {
     std::unordered_set<Path> visited;
-    std::function<const ExFSet&(const Path& path)> findBuiltPackageR =
+    std::function<const ExFSet&(const Path& path)> buildGlobalPackageR =
         [&](const Path& path) -> const ExFSet& {
       const auto projectJsonPath =
           fs::canonical(fs::is_directory(path) ? path / "project.json" : path);
       auto it = builtPackageCache.find(projectJsonPath);
       if (it != builtPackageCache.end()) return it->second;
+
       if (visited.contains(projectJsonPath))
         throw CyclicPackageDependency(visited);
       visited.emplace(projectJsonPath);
+
       const auto& projectDesc = getProjectDesc(projectJsonPath);
-      const auto ex =
-          std::dynamic_pointer_cast<ExportFactory>(projectDesc.usage);
-      if (ex == nullptr) throw PackageNotBuilt(projectDesc.name);
-      ExFSet exSet{std::move(ex)};
+      ExFSet exSet{buildPackage(projectDesc,
+                                projectJsonPath.parent_path() / ".build",
+                                projectJsonPath)};
       for (auto& path : projectDesc.getUsagePackages()) {
-        auto& packages = findBuiltPackageR(path);
+        auto& packages = buildGlobalPackageR(path);
         exSet.insert(packages.begin(), packages.end());
       }
       visited.erase(projectJsonPath);
       return builtPackageCache.emplace(projectJsonPath, std::move(exSet))
           .first->second;
     };
-    return findBuiltPackageR(path);
+    return buildGlobalPackageR(path);
+  }
+
+  std::shared_ptr<ExportFactory> buildPackage(const ProjectDesc projectDesc,
+                                              const Path& output,
+                                              const Path& projectJsonPath) {
+    Context pCtx{
+        .name = projectDesc.name, .output = output, .compiler = ctx.compiler};
+    return projectDesc.getExportFactory(
+        pCtx, projectJsonPath.parent_path(),
+        std::bind(&BuildFileProject::buildGlobalPackage, this,
+                  std::placeholders::_1));
   }
 };
 
