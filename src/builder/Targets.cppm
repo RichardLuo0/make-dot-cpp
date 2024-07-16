@@ -43,8 +43,8 @@ struct CachedTarget : public T {
 };
 
 export struct : public Target {
-  Path getOutput(const CtxWrapper &ctx) const override { return Path(); }
-  std::optional<Ref<Node>> build(BuilderContext &ctx) const override {
+  Path getOutput(const CtxWrapper &) const override { return Path(); }
+  std::optional<Ref<Node>> build(BuilderContext &) const override {
     return std::nullopt;
   }
 } emptyTarget;

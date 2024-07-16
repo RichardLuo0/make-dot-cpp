@@ -39,19 +39,13 @@ export class Clang : public Compiler {
     return *this;
   };
 
-#define GENERATE_COMPILE_METHOD(NAME, ARGS, PASS_ARGS) \
-  process::Result NAME ARGS const override {           \
-    ensureParentExists(output);                        \
-    return process::run(NAME##Command PASS_ARGS);      \
-  }                                                    \
+#define GENERATE_COMPILE_METHOD(NAME, ARGS) \
   std::string NAME##Command ARGS const override
 
   GENERATE_COMPILE_METHOD(
-      compilePCM,
-      (const Path &input, const Path &output,
-       const std::unordered_map<std::string, Path> &moduleMap = {},
-       const std::string &extraOptions = ""),
-      (input, output, moduleMap, extraOptions)) {
+      compilePCM, (const Path &input, const Path &output,
+                   const std::unordered_map<std::string, Path> &moduleMap = {},
+                   const std::string &extraOptions = "")) {
     return std::format(
         "{} -fansi-escape-codes -fcolor-diagnostics "
         "-std=c++20 --precompile -c {} {} {} {} -o {}",
@@ -61,11 +55,9 @@ export class Clang : public Compiler {
   }
 
   GENERATE_COMPILE_METHOD(
-      compile,
-      (const Path &input, const Path &output, bool isDebug = false,
-       const std::unordered_map<std::string, Path> &moduleMap = {},
-       const std::string &extraOptions = ""),
-      (input, output, isDebug, moduleMap, extraOptions)) {
+      compile, (const Path &input, const Path &output, bool isDebug = false,
+                const std::unordered_map<std::string, Path> &moduleMap = {},
+                const std::string &extraOptions = "")) {
     return std::format(
         "{} -fansi-escape-codes -fcolor-diagnostics -c {} {} {} {} {} -o {}",
         process::findExecutable("clang++"), (isDebug ? "-g" : ""),
@@ -73,11 +65,9 @@ export class Clang : public Compiler {
         input.generic_string(), output.generic_string());
   }
 
-  GENERATE_COMPILE_METHOD(link,
-                          (const std::vector<Path> &input, const Path &output,
-                           bool isDebug = false,
-                           const std::string &extraOptions = ""),
-                          (input, output, isDebug, extraOptions)) {
+  GENERATE_COMPILE_METHOD(link, (const std::vector<Path> &input,
+                                 const Path &output, bool isDebug = false,
+                                 const std::string &extraOptions = "")) {
     std::string objList;
     for (auto &obj : input) {
       objList += obj.generic_string() + ' ';
@@ -88,9 +78,8 @@ export class Clang : public Compiler {
         extraOptions, objList, output.generic_string());
   }
 
-  GENERATE_COMPILE_METHOD(archive,
-                          (const std::vector<Path> &input, const Path &output),
-                          (input, output)) {
+  GENERATE_COMPILE_METHOD(archive, (const std::vector<Path> &input,
+                                    const Path &output)) {
     std::string objList;
     for (auto &obj : input) {
       objList += obj.generic_string() + ' ';
@@ -101,8 +90,7 @@ export class Clang : public Compiler {
 
   GENERATE_COMPILE_METHOD(createSharedLib,
                           (const std::vector<Path> &input, const Path &output,
-                           const std::string &extraOptions = ""),
-                          (input, output, extraOptions)) {
+                           const std::string &extraOptions = "")) {
     std::string objList;
     for (auto &obj : input) {
       objList += obj.generic_string() + ' ';

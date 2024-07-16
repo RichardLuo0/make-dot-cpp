@@ -23,8 +23,10 @@ export struct Usage {
 
   // This is used if Usage does not inherit from ExportFactory.
   virtual std::shared_ptr<ExportFactory> getExport(
-      const Context& ctx, const std::string& name,
-      std::function<const ExFSet&(const Path&)> findBuiltPackage) const {
+      [[maybe_unused]] const Context& ctx,
+      [[maybe_unused]] const std::string& name,
+      [[maybe_unused]] std::function<const ExFSet&(const Path&)>
+          findBuiltPackage) const {
     return nullptr;
   };
 
@@ -88,16 +90,15 @@ export struct DefaultUsage : public ExportFactory, public Usage {
 
     const std::string& getName() const override { return name; }
 
-    Path getOutput(const CtxWrapper& ctx) const override { return output; };
+    Path getOutput(const CtxWrapper&) const override { return output; };
 
    protected:
-    std::optional<Ref<DepGraph::Node>> build(
-        BuilderContext& ctx) const override {
+    std::optional<Ref<DepGraph::Node>> build(BuilderContext&) const override {
       return std::nullopt;
     }
 
     std::unordered_map<std::string, Path> getModuleMap(
-        const CtxWrapper& ctx) const override {
+        const CtxWrapper&) const override {
       return std::unordered_map<std::string, Path>();
     }
   };
@@ -139,7 +140,7 @@ export struct DefaultUsage : public ExportFactory, public Usage {
     };
   };
 
-  std::shared_ptr<Export> onCreate(const Context& ctx) const override {
+  std::shared_ptr<Export> onCreate(const Context&) const override {
     return nullptr;
   };
 
@@ -150,7 +151,7 @@ export struct DefaultUsage : public ExportFactory, public Usage {
   std::vector<std::string> libs;
   std::unordered_set<PackagePath, PackagePath::Hash> packages;
 
-  std::shared_ptr<Export> create(const Context& ctx) const override {
+  std::shared_ptr<Export> create(const Context&) const override {
     return std::make_shared<UsageExport>(pcmPath, getCompileOption(),
                                          getLinkOption());
   }
