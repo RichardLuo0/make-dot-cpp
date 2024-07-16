@@ -156,8 +156,9 @@ class BuildFileProject {
 namespace po = boost::program_options;
 
 Path getPackagesPath(const po::variables_map& vm) {
+  const auto* fromEnv = std::getenv("CXX_PACKAGES");
   const auto vv = vm["packages"];
-  return fs::canonical(vv.empty() ? Path(std::getenv("CXX_PACKAGES"))
+  return fs::canonical(vv.empty() ? (fromEnv ? Path(fromEnv) : "packages")
                                   : vv.as<Path>());
 }
 
@@ -218,13 +219,13 @@ int main(int argc, const char** argv) {
     if (projectJsonPath.empty()) return 0;
   }
 
-  if (projectJsonPath.empty()) throw ProjectJsonNoFound();
-  const Path packagesPath = getPackagesPath(vm);
-  auto& vv = vm["compiler"];
-  const auto compiler =
-      getCompiler(vv.empty() ? "clang" : vv.as<std::string>(), packagesPath);
-  BuildFileProject project(projectJsonPath, packagesPath, compiler);
   try {
+    if (projectJsonPath.empty()) throw ProjectJsonNoFound();
+    const Path packagesPath = getPackagesPath(vm);
+    const auto& vv = vm["compiler"];
+    const auto compiler =
+        getCompiler(vv.empty() ? "clang" : vv.as<std::string>(), packagesPath);
+    BuildFileProject project(projectJsonPath, packagesPath, compiler);
     auto future = project.build();
     future.get();
     const auto output = project.getOutput();

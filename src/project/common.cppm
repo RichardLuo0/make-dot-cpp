@@ -18,9 +18,7 @@ export struct PackagePath : public Path {
 };
 
 struct ProjectFmtStr : public std::string {};
-struct ProjectFmtPath : public Path {
-  using Path::path;
-};
+struct ProjectFmtPath : public Path {};
 
 struct PackageLoc {
  public:

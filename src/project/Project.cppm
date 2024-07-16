@@ -28,7 +28,6 @@ export class Project {
                       "Output directory. Default to `build`.")
           .operator()("installPath,i", po::value<Path>(),
                       "Installation directory.")
-          .operator()("packages,p", po::value<Path>(), "Packages directory.")
           .operator()("debug,g", "Enable debug.")
           .operator()("verbose,v", "Enable verbose output.");
     }
@@ -49,12 +48,6 @@ export class Project {
                     .run(),
                 vm);
       po::notify(vm);
-    }
-
-    Path getPackagesPath() {
-      const auto vv = vm["packages"];
-      return fs::canonical(vv.empty() ? Path(std::getenv("CXX_PACKAGES"))
-                                      : vv.as<Path>());
     }
 
     void printHelp() const { std::cout << od << std::endl; }

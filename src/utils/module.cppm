@@ -131,16 +131,10 @@ std::unique_ptr<T> tag_invoke(const json::value_to_tag<std::unique_ptr<T>>&,
 }
 
 export template <class T>
-struct Merge : public T {
-  Merge(T&& t) : T(t) {}
-  using T::T;
-};
+struct Merge : public T {};
 
 export template <class T>
-struct Required : public T {
-  Required(T&& t) : T(t) {}
-  using T::T;
-};
+struct Required : public T {};
 
 DEF_EXCEPTION(RequiredJsonMember, (const std::string& name),
               "required json member: " + name);
