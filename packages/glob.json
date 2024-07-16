@@ -1,12 +1,6 @@
 {
   "name": "glob",
   "usage": {
-    "type": "custom",
-    "devPackages": [
-      "std",
-      "makeDotCpp"
-    ],
-    "setupFile": "{0}/export.cpp",
     "compileOption": "-I {0}/glob/include",
     "linkOption": "{0}/../build-cmake/packages/glob/libglob.a"
   }
