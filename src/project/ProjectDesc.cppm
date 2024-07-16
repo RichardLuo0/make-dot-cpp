@@ -14,7 +14,7 @@ import boost.json;
 namespace makeDotCpp {
 export struct ProjectDesc {
  public:
-  std::string name;
+  Required<std::string> name;
   std::unordered_set<PackagePath, PackagePath::Hash> packages;
 
   struct Dev {
@@ -28,7 +28,6 @@ export struct ProjectDesc {
                          ())
   };
   Merge<Dev> dev;
-
   std::shared_ptr<Usage> usage;
 
   static ProjectDesc create(const Path& path, const Path& packagesPath) {
@@ -45,12 +44,12 @@ export struct ProjectDesc {
   }
 
   std::shared_ptr<ExportFactory> getUsageExport(
-      const Context& ctx,
+      const Context& ctx, const Path& projectPath,
       std::function<const ExFSet&(const Path&)> findBuiltPackage) const {
     if (auto ex = std::dynamic_pointer_cast<ExportFactory>(usage))
       return ex;
     else
-      return usage->getExport(ctx, name, findBuiltPackage);
+      return usage->getExport(ctx, name, projectPath, findBuiltPackage);
   }
 
  private:

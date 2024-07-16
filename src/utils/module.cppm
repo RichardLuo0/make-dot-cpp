@@ -8,6 +8,7 @@ import std;
 import boost.json;
 
 #include "alias.hpp"
+#include "macro.hpp"
 
 namespace makeDotCpp {
 export template <typename T>
@@ -40,7 +41,7 @@ export template <class C>
 struct to {};
 
 export template <class C>
-inline C operator|(std::ranges::range auto&& range, to<C> to) {
+inline C operator|(std::ranges::range auto&& range, to<C>) {
   C result;
   std::ranges::copy(range.begin(), range.end(),
                     std::inserter(result, result.end()));
@@ -49,7 +50,7 @@ inline C operator|(std::ranges::range auto&& range, to<C> to) {
 
 export template <class Item>
 inline std::vector<Item> operator|(std::ranges::range auto&& range,
-                                   to<std::vector<Item>> to) {
+                                   to<std::vector<Item>>) {
   std::vector<Item> result;
   result.reserve(std::ranges::size(range));
   std::ranges::copy(range.begin(), range.end(), std::back_inserter(result));
@@ -130,7 +131,25 @@ std::unique_ptr<T> tag_invoke(const json::value_to_tag<std::unique_ptr<T>>&,
 }
 
 export template <class T>
-struct Merge : public T {};
+struct Merge : public T {
+  Merge(T&& t) : T(t) {}
+  using T::T;
+};
+
+export template <class T>
+struct Required : public T {
+  Required(T&& t) : T(t) {}
+  using T::T;
+};
+
+DEF_EXCEPTION(RequiredJsonMember, (const std::string& name),
+              "required json member: " + name);
+
+template <class T>
+struct isRequired : std::false_type {};
+
+template <class T>
+struct isRequired<Required<T>> : std::true_type {};
 
 export template <class T, class Ctx>
 Merge<T> tag_invoke(const json::value_to_tag<Merge<T>>&, const json::value& jv,
@@ -139,14 +158,15 @@ Merge<T> tag_invoke(const json::value_to_tag<Merge<T>>&, const json::value& jv,
   const auto obj = jv.as_object();
   using namespace boost::describe;
   boost::mp11::mp_for_each<describe_members<T, mod_public>>([&](auto&& m) {
+    auto& member = t.*m.pointer;
+    using memberType = std::remove_reference_t<decltype(member)>;
     const auto* value = obj.if_contains(m.name);
     if (value) {
-      auto& member = t.*m.pointer;
-      using memberType = std::remove_reference_t<decltype(member)>;
       auto cValue =
           json::try_value_to<memberType>(*value, std::forward<Ctx>(ctx));
       if (cValue) member = std::move(*cValue);
-    }
+    } else if (isRequired<memberType>::value)
+      throw RequiredJsonMember(m.name);
   });
   return t;
 }
@@ -155,5 +175,17 @@ export template <class T>
 void tag_invoke(const json::value_from_tag&, json::value& jv,
                 const Merge<T>& merge) {
   jv = json::value_from(static_cast<T>(merge));
+}
+
+export template <class T, class Ctx>
+Required<T> tag_invoke(const json::value_to_tag<Required<T>>&,
+                       const json::value& jv, Ctx&& ctx) {
+  return Required<T>(json::value_to<T>(jv, ctx));
+}
+
+export template <class T>
+void tag_invoke(const json::value_from_tag&, json::value& jv,
+                const Required<T>& t) {
+  jv = json::value_from(static_cast<T>(t));
 }
 }  // namespace makeDotCpp

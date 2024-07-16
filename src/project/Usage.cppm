@@ -25,6 +25,7 @@ export struct Usage {
   virtual std::shared_ptr<ExportFactory> getExport(
       [[maybe_unused]] const Context& ctx,
       [[maybe_unused]] const std::string& name,
+      [[maybe_unused]] const Path& projectPath,
       [[maybe_unused]] std::function<const ExFSet&(const Path&)>
           findBuiltPackage) const {
     return nullptr;
@@ -38,20 +39,23 @@ export struct CustomUsage : public Usage {
  public:
   std::unordered_set<PackagePath, PackagePath::Hash> devPackages;
   std::unordered_set<PackagePath, PackagePath::Hash> packages;
-  std::variant<Path, std::vector<Path>> setupFile;
+  Required<std::variant<ProjectFmtPath, std::vector<ProjectFmtPath>>> setupFile;
 
   std::shared_ptr<ExportFactory> getExport(
-      const Context& ctx, const std::string& name,
+      const Context& ctx, const std::string& name, const Path& projectPath,
       std::function<const ExFSet&(const Path&)> findBuiltPackage)
       const override {
-    LibBuilder builder(name + "_export");
-    builder.setShared(true).define("NO_MAIN").define("PROJECT_NAME=" + name);
+    LibBuilder builder(name);
+    builder.setShared(true)
+        .define("NO_MAIN")
+        .define("PROJECT_NAME=" + name)
+        .define("PROJECT_PATH=" + projectPath.generic_string());
     std::visit(
         [&](auto&& setupFile) {
           using T = std::decay_t<decltype(setupFile)>;
-          if constexpr (std::is_same_v<T, Path>)
+          if constexpr (std::is_same_v<T, ProjectFmtPath>)
             builder.addSrc(setupFile);
-          else if constexpr (std::is_same_v<T, std::vector<Path>>) {
+          else if constexpr (std::is_same_v<T, std::vector<ProjectFmtPath>>) {
             for (auto& singleFile : setupFile) builder.addSrc(singleFile);
           }
         },
@@ -59,7 +63,9 @@ export struct CustomUsage : public Usage {
     for (auto& path : devPackages) {
       builder.dependOn(findBuiltPackage(path));
     }
-    Context pCtx{name, ctx.output / "packages" / name};
+    const Path output = ctx.output / "packages" / name;
+    fs::create_directories(output);
+    Context pCtx{.name = name, .output = output, .compiler = ctx.compiler};
     auto result = builder.build(pCtx);
     result.get();
     auto lib = std::make_shared<boost::dll::shared_library>(
@@ -138,10 +144,6 @@ export struct DefaultUsage : public ExportFactory, public Usage {
             .first->second;
       }
     };
-  };
-
-  std::shared_ptr<Export> onCreate(const Context&) const override {
-    return nullptr;
   };
 
  public:

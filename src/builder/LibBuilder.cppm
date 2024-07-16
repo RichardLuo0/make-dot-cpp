@@ -35,7 +35,7 @@ export struct LibTarget : public CachedTarget<>, public Deps<> {
     const auto nodeList = Deps::buildNodeList(ctx);
     const auto depsOutput = Deps::getDepsOutput(ctx);
     const Path output = getOutput(ctx);
-    if (!depsOutput.empty() && ctx.isNeedUpdate(output, depsOutput)) {
+    if (ctx.isNeedUpdate(output, depsOutput)) {
       return isShared ? ctx.createSharedLib(depsOutput, output, nodeList)
                       : ctx.archive(depsOutput, output, nodeList);
     }
@@ -95,7 +95,7 @@ struct ModuleTargetProxy : public TargetProxy<ModuleTarget> {
   }
 };
 
-export class LibBuilder : public ObjBuilder, public ExportFactory {
+export class LibBuilder : public ObjBuilder, public CachedExportFactory {
  protected:
   CHAIN_VAR(bool, isShared, false, setShared);
 

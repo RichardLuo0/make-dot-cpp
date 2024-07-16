@@ -64,7 +64,9 @@ export class Builder {
   std::string name = "builder";
 
  protected:
-  CHAIN_VAR_SET(Path, srcSet, addSrc, src) { srcSet.emplace(src); };
+  CHAIN_VAR_SET(Path, srcSet, addSrc, src) { srcSet.emplace(src); }
+
+  CHAIN_METHOD(addSrc, FileProvider, p) { srcSet.merge(p.list()); }
 
  protected:
   CHAIN_VAR_SET(std::shared_ptr<const ExportFactory>, exFactorySet, dependOn,
@@ -92,6 +94,7 @@ export class Builder {
     const Path path = get##NAME(ctx);                      \
     const auto &content = compilerOptions.OPTIONS;         \
     if (!fs::exists(path) || readAsStr(path) != content) { \
+      fs::create_directories(path.parent_path());          \
       std::ofstream os(path);                              \
       os.exceptions(std::ifstream::failbit);               \
       os << content;                                       \
@@ -106,7 +109,6 @@ export class Builder {
   GENERATE_OPTIONS_JSON_METHOD(LinkOptionsJson, linkOption);
 #undef GENERATE_OPTIONS_JSON_METHOD
 
-  CHAIN_METHOD(addSrc, FileProvider, p) { srcSet.merge(p.list()); }
   CHAIN_METHOD(define, std::string, d) {
     compilerOptions.compileOption += " -D " + d;
   }

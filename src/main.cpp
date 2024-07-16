@@ -31,7 +31,6 @@ class BuildFileProject {
   const ProjectDesc projectDesc;
   Context ctx;
   const Path packagesPath;
-  std::shared_ptr<Compiler> compiler;
   LibBuilder builder;
   api::Packages packageExports;
 
@@ -43,15 +42,15 @@ class BuildFileProject {
   BuildFileProject(const Path& projectJsonPath, const Path& packagesPath,
                    const std::shared_ptr<Compiler>& compiler)
       : projectDesc(ProjectDesc::create(projectJsonPath, packagesPath)),
-        ctx(projectDesc.name + "_build", fs::weakly_canonical(".build")),
+        ctx{.name = projectDesc.name + "_build",
+            .output = fs::weakly_canonical(".build"),
+            .compiler = compiler},
         packagesPath(packagesPath),
-        compiler(compiler),
         builder(projectDesc.name + "_build") {
     compiler->addOption("-march=native -std=c++20 -Wall");
 #ifdef _WIN32
     compiler->addOption("-D _WIN32");
 #endif
-    ctx.compiler = compiler;
     ctx.debug = projectDesc.dev.debug;
 
     builder.setShared(true);
@@ -81,7 +80,10 @@ class BuildFileProject {
 
   const auto& getContext() const { return ctx; }
 
-  auto build() { return builder.build(ctx); }
+  auto build() {
+    fs::create_directories(ctx.output);
+    return builder.build(ctx);
+  }
 
   auto getOutput() const { return builder.getOutput(ctx); }
 
@@ -98,7 +100,6 @@ class BuildFileProject {
   void buildExportPackage(const Path& path) {
     const auto projectJsonPath =
         fs::canonical(fs::is_directory(path) ? path / "project.json" : path);
-    const auto projectPath = projectJsonPath.parent_path();
     if (builtExportPackageCache.contains(projectJsonPath)) return;
     builtExportPackageCache.emplace(projectJsonPath);
 
@@ -106,11 +107,11 @@ class BuildFileProject {
     for (auto& path : projectDesc.getUsagePackages()) {
       buildExportPackage(path);
     }
-    packageExports.emplace(
-        projectDesc.name,
-        projectDesc.getUsageExport(
-            ctx, std::bind(&BuildFileProject::findBuiltPackage, this,
-                           std::placeholders::_1)));
+    packageExports.emplace(projectDesc.name,
+                           projectDesc.getUsageExport(
+                               ctx, projectJsonPath.parent_path(),
+                               std::bind(&BuildFileProject::findBuiltPackage,
+                                         this, std::placeholders::_1)));
   }
 
   const ExFSet& findBuiltPackage(const Path& path) {

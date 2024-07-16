@@ -24,15 +24,18 @@ export struct Export {
 };
 
 export struct ExportFactory {
+  // This is used for user build file to change behaviours in export.
+  virtual void set([[maybe_unused]] const std::string& key,
+                   [[maybe_unused]] const std::string& value) {}
+  virtual std::shared_ptr<Export> create(const Context& ctx) const = 0;
+};
+
+export struct CachedExportFactory : public ExportFactory {
  private:
   mutable std::unordered_map<const Context*, std::weak_ptr<Export>> cache;
 
  public:
-  // This is used for user build file to change behaviours in export.
-  virtual void set([[maybe_unused]] const std::string& key,
-                   [[maybe_unused]] const std::string& value) {}
-
-  virtual std::shared_ptr<Export> create(const Context& ctx) const {
+  std::shared_ptr<Export> create(const Context& ctx) const override {
     auto it = cache.find(&ctx);
     if (it != cache.end())
       if (auto ex = it->second.lock()) return ex;
