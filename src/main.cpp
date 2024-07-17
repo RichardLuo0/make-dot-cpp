@@ -16,7 +16,7 @@ import boost.json;
 
 using namespace makeDotCpp;
 
-DEF_EXCEPTION(ProjectJsonNoFound, (),
+DEF_EXCEPTION(ProjectJsonNotFound, (),
               "project.json is not found in current location");
 DEF_EXCEPTION(CyclicPackageDependency, (ranges::range<Path> auto&& visited),
               "detected cyclic package dependency: " +
@@ -35,8 +35,8 @@ class BuildFileProject {
   api::Packages packageExports;
 
   std::unordered_map<Path, const ProjectDesc> projectDescCache;
-  std::unordered_set<Path> builtExportPackageCache;
-  std::unordered_map<Path, const ExFSet> builtPackageCache;
+  std::unordered_set<Path> localPackageCache;
+  std::unordered_map<Path, const ExFSet> globalPackageCache;
 
  public:
   BuildFileProject(const Path& projectJsonPath, const Path& packagesPath,
@@ -93,15 +93,16 @@ class BuildFileProject {
   const ProjectDesc& getProjectDesc(const Path& projectJsonPath) {
     auto it = projectDescCache.find(projectJsonPath);
     if (it != projectDescCache.end()) return it->second;
-    const auto projectDesc = ProjectDesc::create(projectJsonPath, packagesPath);
-    return projectDescCache.emplace(projectJsonPath, projectDesc).first->second;
+    auto projectDesc = ProjectDesc::create(projectJsonPath, packagesPath);
+    return projectDescCache.emplace(projectJsonPath, std::move(projectDesc))
+        .first->second;
   }
 
   void buildLocalPackage(const Path& path) {
     const auto projectJsonPath =
         fs::canonical(fs::is_directory(path) ? path / "project.json" : path);
-    if (builtExportPackageCache.contains(projectJsonPath)) return;
-    builtExportPackageCache.emplace(projectJsonPath);
+    if (localPackageCache.contains(projectJsonPath)) return;
+    localPackageCache.emplace(projectJsonPath);
 
     const auto& projectDesc = getProjectDesc(projectJsonPath);
     for (auto& path : projectDesc.getUsagePackages()) {
@@ -119,8 +120,8 @@ class BuildFileProject {
         [&](const Path& path) -> const ExFSet& {
       const auto projectJsonPath =
           fs::canonical(fs::is_directory(path) ? path / "project.json" : path);
-      auto it = builtPackageCache.find(projectJsonPath);
-      if (it != builtPackageCache.end()) return it->second;
+      auto it = globalPackageCache.find(projectJsonPath);
+      if (it != globalPackageCache.end()) return it->second;
 
       if (visited.contains(projectJsonPath))
         throw CyclicPackageDependency(visited);
@@ -135,15 +136,15 @@ class BuildFileProject {
         exSet.insert(packages.begin(), packages.end());
       }
       visited.erase(projectJsonPath);
-      return builtPackageCache.emplace(projectJsonPath, std::move(exSet))
+      return globalPackageCache.emplace(projectJsonPath, std::move(exSet))
           .first->second;
     };
     return buildGlobalPackageR(path);
   }
 
-  std::shared_ptr<ExportFactory> buildPackage(const ProjectDesc projectDesc,
-                                              const Path& output,
-                                              const Path& projectJsonPath) {
+  std::shared_ptr<const ExportFactory> buildPackage(
+      const ProjectDesc& projectDesc, const Path& output,
+      const Path& projectJsonPath) {
     Context pCtx{
         .name = projectDesc.name, .output = output, .compiler = ctx.compiler};
     return projectDesc.getExportFactory(
@@ -177,8 +178,7 @@ void generateCompileCommands(
   std::ofstream os(ccPath);
   os.exceptions(std::ifstream::failbit);
   os << array;
-  std::cout << logger::green << "Built " << ccPath << logger::reset
-            << std::endl;
+  logger::success() << "Built " << ccPath << std::endl;
 }
 
 DEF_EXCEPTION(UnknownCompiler, (const std::string& name),
@@ -220,7 +220,7 @@ int main(int argc, const char** argv) {
   }
 
   try {
-    if (projectJsonPath.empty()) throw ProjectJsonNoFound();
+    if (projectJsonPath.empty()) throw ProjectJsonNotFound();
     const Path packagesPath = getPackagesPath(vm);
     const auto& vv = vm["compiler"];
     const auto compiler =
@@ -229,8 +229,7 @@ int main(int argc, const char** argv) {
     auto future = project.build();
     future.get();
     const auto output = project.getOutput();
-    std::cout << logger::green << "Built " << output << logger::reset
-              << std::endl;
+    logger::success() << "Built " << output << std::endl;
 
     if (vm.contains("no-build")) return 0;
 
@@ -242,8 +241,7 @@ int main(int argc, const char** argv) {
       generateCompileCommands(project.getContext(), api::compileCommands);
     return ret;
   } catch (const std::exception& e) {
-    std::cerr << logger::red << "Error: " << e.what() << logger::reset
-              << std::endl;
+    logger::error() << "Error: " << e.what() << std::endl;
     return 1;
   }
 }

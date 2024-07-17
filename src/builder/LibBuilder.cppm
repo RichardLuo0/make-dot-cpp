@@ -35,7 +35,7 @@ export struct LibTarget : public CachedTarget<>, public Deps<> {
     const auto nodeList = Deps::buildNodeList(ctx);
     const auto depsOutput = Deps::getDepsOutput(ctx);
     const Path output = getOutput(ctx);
-    if (ctx.isNeedUpdate(output, depsOutput)) {
+    if (ctx.needsUpdate(output, depsOutput)) {
       return isShared ? ctx.createSharedLib(depsOutput, output, nodeList)
                       : ctx.archive(depsOutput, output, nodeList);
     }
@@ -146,7 +146,7 @@ export class LibBuilder : public ObjBuilder, public CachedExportFactory {
           targetList(builder.onBuild(ctx, moduleMap)),
           target(targetList.getTarget(), compilerOptions) {}
 
-    std::optional<Ref<const ModuleTarget>> findPCM(
+    std::optional<Ref<const ModuleTarget>> findModule(
         const std::string &moduleName) const override {
       const auto it = moduleMap.find(moduleName);
       return it == moduleMap.end()

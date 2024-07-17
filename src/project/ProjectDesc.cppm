@@ -11,7 +11,12 @@ import makeDotCpp.builder;
 import makeDotCpp.utils;
 import boost.json;
 
+#include "macro.hpp"
+
 namespace makeDotCpp {
+DEF_EXCEPTION(UsageNotDefined, (const std::string& name),
+              "no usage is defined in package: " + name);
+
 export struct ProjectDesc {
  public:
   Required<std::string> name;
@@ -40,16 +45,15 @@ export struct ProjectDesc {
 
   const std::unordered_set<PackagePath, PackagePath::Hash>& getUsagePackages()
       const {
+    if (usage == nullptr) throw UsageNotDefined(name);
     return usage->getPackages();
   }
 
-  std::shared_ptr<ExportFactory> getExportFactory(
+  std::shared_ptr<const ExportFactory> getExportFactory(
       const Context& ctx, const Path& projectPath,
       std::function<const ExFSet&(const Path&)> buildPackage) const {
-    if (auto ex = std::dynamic_pointer_cast<ExportFactory>(usage))
-      return ex;
-    else
-      return usage->getExportFactory(ctx, name, projectPath, buildPackage);
+    if (usage == nullptr) throw UsageNotDefined(name);
+    return usage->getExportFactory(ctx, name, projectPath, buildPackage);
   }
 
  private:

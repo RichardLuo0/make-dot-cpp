@@ -32,7 +32,7 @@ export struct CtxWrapper {
 
   Path outputPath() const { return ctx.output; }
 
-  Path pcmPath() const { return ctx.pcmPath(); }
+  Path modulePath() const { return ctx.modulePath(); }
 
   Path objPath() const { return ctx.objPath(); }
 };
@@ -53,8 +53,8 @@ export struct VFSContext : public CtxWrapper {
                               : fs::last_write_time(path);
   }
 
-  bool isNeedUpdate(const Path &output,
-                    ranges::range<const Path> auto &&deps) const {
+  bool needsUpdate(const Path &output,
+                   ranges::range<const Path> auto &&deps) const {
     if (!exists(output))
       return true;
     else {
@@ -109,12 +109,11 @@ export struct BuilderContext : public VFSContext {
     return collect(ctx.depGraph.addNode(                                    \
         [=, id = id++, verbose = this->ctx.verbose,                         \
          UNPACK CAPTURE](DepGraph &graph) {                                 \
-          logger::info(std::format("\033[0;34m[{}] " LOGNAME ": {}\033[0m", \
-                                   id, output.generic_string()));           \
-          logger::flush();                                                  \
+          logger::blue() << std::format("[{}] " LOGNAME ": ", id) << output \
+                         << std::endl;                                      \
           const auto &result = FUNC;                                        \
-          if (verbose) logger::info(result.command);                        \
-          if (!result.output.empty()) logger::info(result.output);          \
+          if (verbose) logger::info() << result.command;                    \
+          if (!result.output.empty()) logger::info() << result.output;      \
           logger::flush();                                                  \
           if (result.status != 0) {                                         \
             graph.terminate();                                              \
@@ -126,13 +125,13 @@ export struct BuilderContext : public VFSContext {
   }
 
   GENERATE_COMPILE_METHOD(
-      compilePCM,
+      compileModule,
       (const Path &input,
        const std::unordered_map<std::string, Path> &moduleMap),
       (compiler = this->compiler, compilerOptions = this->compilerOptions),
-      "Compiling pcm",
-      compiler->compilePCM(input, output, moduleMap,
-                           compilerOptions.compileOption));
+      "Compiling module",
+      compiler->compileModule(input, output, moduleMap,
+                              compilerOptions.compileOption));
   GENERATE_COMPILE_METHOD(
       compile,
       (const Path &input,

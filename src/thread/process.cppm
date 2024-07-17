@@ -3,6 +3,7 @@ module;
 
 export module makeDotCpp.thread.process;
 import std;
+import makeDotCpp.thread.logger;
 
 #include "alias.hpp"
 #include "macro.hpp"
@@ -38,7 +39,7 @@ export const Result run(const std::string &command) {
   while (child.running(ec) && std::getline(errIs, line) && !line.empty()) {
     result.output += line + '\n';
     if (ec) {
-      std::cout << result.output << std::endl;
+      logger::error() << result.output << std::endl;
       throw ProcessError(ec);
     }
   }

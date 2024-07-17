@@ -15,7 +15,7 @@
     ]
   },
   "usage": {
-    "pcmPath": "{0}/lib",
+    "compileOption": "-fprebuilt-module-path={0}/lib",
     "linkOption": "{0}/bin/libmakeDotCpp.dll",
     "packages": [
       "std",

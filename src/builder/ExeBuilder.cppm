@@ -32,7 +32,7 @@ export struct ExeTarget : public CachedTarget<>,
     const auto nodeList = Deps::buildNodeList(ctx);
     const auto depsOutput = Deps::getDepsOutput(ctx);
     const Path output = getOutput(ctx);
-    if (ctx.isNeedUpdate(output, depsOutput)) {
+    if (ctx.needsUpdate(output, depsOutput)) {
       return ctx.link(depsOutput, output, nodeList);
     }
     return std::nullopt;

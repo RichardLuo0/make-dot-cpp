@@ -29,23 +29,26 @@ export class Clang : public Compiler {
   }
 
  public:
-  Clang &addOption(std::string option) override {
+  Clang &addOption(const std::string &option) override {
     compileOption += ' ' + option;
     return *this;
   };
 
-  Clang &addLinkOption(std::string option) override {
+  Clang &addLinkOption(const std::string &option) override {
     linkOption += ' ' + option;
     return *this;
   };
+
+  std::string getModuleSuffix() const override { return ".pcm"; };
 
 #define GENERATE_COMPILE_METHOD(NAME, ARGS) \
   std::string NAME##Command ARGS const override
 
   GENERATE_COMPILE_METHOD(
-      compilePCM, (const Path &input, const Path &output,
-                   const std::unordered_map<std::string, Path> &moduleMap = {},
-                   const std::string &extraOptions = "")) {
+      compileModule,
+      (const Path &input, const Path &output,
+       const std::unordered_map<std::string, Path> &moduleMap = {},
+       const std::string &extraOptions = "")) {
     return std::format(
         "{} -fansi-escape-codes -fcolor-diagnostics "
         "-std=c++20 --precompile -c {} {} {} {} -o {}",

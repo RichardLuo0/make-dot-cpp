@@ -13,7 +13,7 @@ export struct Export {
 
   virtual std::string getLinkOption() const { return std::string(); }
 
-  virtual std::optional<Ref<const ModuleTarget>> findPCM(
+  virtual std::optional<Ref<const ModuleTarget>> findModule(
       [[maybe_unused]] const std::string& moduleName) const {
     return std::nullopt;
   }

@@ -4,25 +4,21 @@ import :Targets;
 import std;
 import makeDotCpp;
 import makeDotCpp.utils;
+import makeDotCpp.thread.logger;
 
 #include "alias.hpp"
 #include "macro.hpp"
 
 namespace makeDotCpp {
-export DEF_EXCEPTION(ModuleNotFound,
-                     (const Path input, const std::string &moduleName),
-                     input.generic_string() +
-                         ": module not found: " + moduleName);
-
 export class ObjBuilder : public Builder {
  protected:
   using ModuleMap = std::unordered_map<std::string, Ref<const ModuleTarget>>;
 
-  std::optional<Ref<const ModuleTarget>> findPCM(
+  std::optional<Ref<const ModuleTarget>> findModuleInExports(
       const std::string &moduleName) const {
     for (auto &ex : exSet) {
-      const auto pcmOpt = ex->findPCM(moduleName);
-      if (pcmOpt.has_value()) return pcmOpt.value();
+      const auto modOpt = ex->findModule(moduleName);
+      if (modOpt.has_value()) return modOpt.value();
     }
     return std::nullopt;
   }
@@ -39,10 +35,11 @@ export class ObjBuilder : public Builder {
       std::unique_ptr<ObjTarget> obj;
       const auto objPath = fs::proximate(unit.input, base) += ".obj";
       if (unit.exported) {
-        obj = std::make_unique<ObjTarget>(
-            unit.input, unit.includeDeps, objPath, unit.moduleName,
-            replace(unit.moduleName, ':', '-') + ".pcm");
-        moduleMap.emplace(unit.moduleName, obj->getPCM());
+        const auto modFile = replace(unit.moduleName, ':', '-') +
+                             ctx.compiler->getModuleSuffix();
+        obj = std::make_unique<ObjTarget>(unit.input, unit.includeDeps, objPath,
+                                          unit.moduleName, modFile);
+        moduleMap.emplace(unit.moduleName, obj->getModule());
       } else
         obj =
             std::make_unique<ObjTarget>(unit.input, unit.includeDeps, objPath);
@@ -59,13 +56,13 @@ export class ObjBuilder : public Builder {
         if (it != moduleMap.end())
           target.dependOn(it->second);
         else {
-          const auto pcmOpt = findPCM(dep);
-          if (pcmOpt.has_value()) {
-            const auto pcm = pcmOpt.value();
-            moduleMap.emplace(dep, pcm);
-            target.dependOn(pcm);
+          const auto modOpt = findModuleInExports(dep);
+          if (modOpt.has_value()) {
+            const auto mod = modOpt.value();
+            moduleMap.emplace(dep, mod);
+            target.dependOn(mod);
           } else
-            throw ModuleNotFound(unit.input, dep);
+            logger::warn() << unit.input << ": module not found: " << dep;
         }
       }
     }

@@ -1,10 +1,14 @@
 export module makeDotCpp.thread.logger;
 import std;
 
+#include "alias.hpp"
+
 namespace makeDotCpp {
 namespace logger {
 thread_local std::string out;
 std::mutex mutex;
+
+export const std::string reset = "\033[0m";
 
 export void flush() {
   std::lock_guard lock(mutex);
@@ -13,12 +17,49 @@ export void flush() {
   out.clear();
 }
 
-export void info(const std::string& msg) { out += msg + '\n'; }
+using EndlType = decltype(std::endl<char, std::char_traits<char>>);
 
-export const std::string reset = "\033[0m";
+struct Logger {
+ protected:
+  std::string content;
+  bool isFlushed = false;
+
+  std::string flushContent() {
+    isFlushed = true;
+    return content + reset + '\n';
+  }
+
+ public:
+  Logger() {}
+  Logger(const std::string& init) : content(init) {}
+
+  template <class T>
+  auto& operator<<(const T& msg) {
+    content += std::string(msg);
+    return *this;
+  }
+
+  auto& operator<<(const Path& path) {
+    return operator<<(path.generic_string());
+  }
+
+  auto& operator<<(Logger& logger) {
+    content += logger.flushContent();
+    return *this;
+  }
+
+  void operator<<(EndlType&) {
+    out += flushContent();
+    flush();
+  }
+
+  ~Logger() {
+    if (!isFlushed) out += flushContent();
+  }
+};
 
 #define GENERATE_COLOR(NAME, CODE) \
-  export const std::string NAME = "\033[0;" #CODE;
+  export Logger NAME() { return {"\033[0;" #CODE}; };
 
 GENERATE_COLOR(defaultColor, 39m);
 GENERATE_COLOR(black, 30m);
@@ -38,5 +79,8 @@ GENERATE_COLOR(brightMagenta, 95m);
 GENERATE_COLOR(brightCyan, 96m);
 GENERATE_COLOR(white, 97m);
 #undef GENERATE_COLOR
+
+export Logger info() { return {}; }
+export auto success = green, warn = yellow, error = red;
 }  // namespace logger
 }  // namespace makeDotCpp

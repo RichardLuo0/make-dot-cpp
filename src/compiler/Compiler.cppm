@@ -15,8 +15,10 @@ export class Compiler {
  public:
   virtual ~Compiler() = default;
 
-  virtual Compiler &addOption(std::string option) = 0;
-  virtual Compiler &addLinkOption(std::string option) = 0;
+  virtual Compiler &addOption(const std::string &option) = 0;
+  virtual Compiler &addLinkOption(const std::string &option) = 0;
+
+  virtual std::string getModuleSuffix() const = 0;
 
 #define GENERATE_COMPILE_METHOD(NAME, ARGS, PASS_ARGS) \
   virtual process::Result NAME ARGS const {            \
@@ -27,7 +29,7 @@ export class Compiler {
   virtual std::string NAME##Command ARGS const = 0;
 
   GENERATE_COMPILE_METHOD(
-      compilePCM,
+      compileModule,
       (const Path &input, const Path &output,
        const std::unordered_map<std::string, Path> &moduleMap = {},
        const std::string &extraOptions = ""),

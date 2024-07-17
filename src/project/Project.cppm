@@ -2,6 +2,7 @@ export module makeDotCpp.project;
 import std;
 import makeDotCpp;
 import makeDotCpp.compiler;
+import makeDotCpp.thread.logger;
 import boost.program_options;
 
 #include "alias.hpp"
@@ -81,8 +82,8 @@ export class Project {
   CHAIN_METHOD(setThreadPoolSize, std::size_t, size) {
     ctx.threadPool.setSize(size);
   }
-  CHAIN_METHOD(setRelativePCMPath, std::string, path) {
-    ctx.relativePCMPath = path;
+  CHAIN_METHOD(setRelativeModulePath, std::string, path) {
+    ctx.relativeModulePath = path;
   }
   CHAIN_METHOD(setRelativeObjPath, std::string, path) {
     ctx.relativeObjPath = path;
@@ -173,13 +174,13 @@ export class Project {
 
   static void updateFile(const Path &from, const Path &to) {
     fs::copy(from, to, fs::copy_options::update_existing);
-    std::cout << "Updating " << to << std::endl;
+    logger::success() << "Updated " << to << std::endl;
   }
 
   static void updateAllFiles(const Path &from, const Path &to) {
     fs::copy(from, to,
              fs::copy_options::update_existing | fs::copy_options::recursive);
-    std::cout << "Updating " << to << std::endl;
+    logger::success() << "Updated " << to << std::endl;
   }
 };
 }  // namespace makeDotCpp

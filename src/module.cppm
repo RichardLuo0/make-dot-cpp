@@ -13,7 +13,7 @@ export struct Context {
   Path output = fs::weakly_canonical("build");
   Path install;
   bool debug = false;
-  Path relativePCMPath = "pcm";
+  Path relativeModulePath = "module";
   Path relativeObjPath = "obj";
   std::shared_ptr<const Compiler> compiler;
 
@@ -22,7 +22,7 @@ export struct Context {
   static inline ThreadPool threadPool{8};
   static inline DepGraph depGraph;
 
-  Path pcmPath() const { return output / relativePCMPath; }
+  Path modulePath() const { return output / relativeModulePath; }
   Path objPath() const { return output / relativeObjPath; }
 
   void run() const { depGraph.runOn(threadPool); }

@@ -15,21 +15,18 @@ import boost.dll;
 #include "alias.hpp"
 
 namespace makeDotCpp {
-export using ExFSet = std::unordered_set<std::shared_ptr<ExportFactory>>;
+export using ExFSet = std::unordered_set<std::shared_ptr<const ExportFactory>>;
 
 export struct Usage {
  public:
   virtual ~Usage() = default;
 
-  // This is used if Usage does not inherit from ExportFactory.
-  virtual std::shared_ptr<ExportFactory> getExportFactory(
+  virtual std::shared_ptr<const ExportFactory> getExportFactory(
       [[maybe_unused]] const Context& ctx,
       [[maybe_unused]] const std::string& name,
       [[maybe_unused]] const Path& projectPath,
       [[maybe_unused]] std::function<const ExFSet&(const Path&)> buildPackage)
-      const {
-    return nullptr;
-  };
+      const = 0;
 
   virtual const std::unordered_set<PackagePath, PackagePath::Hash>&
   getPackages() const = 0;
@@ -41,7 +38,7 @@ export struct CustomUsage : public Usage {
   std::unordered_set<PackagePath, PackagePath::Hash> packages;
   Required<std::variant<ProjectFmtPath, std::vector<ProjectFmtPath>>> setupFile;
 
-  std::shared_ptr<ExportFactory> getExportFactory(
+  std::shared_ptr<const ExportFactory> getExportFactory(
       const Context& ctx, const std::string& name, const Path& projectPath,
       std::function<const ExFSet&(const Path&)> buildPackage) const override {
     LibBuilder builder(name);
@@ -80,88 +77,43 @@ export struct CustomUsage : public Usage {
                        ())
 };
 
-export struct DefaultUsage : public ExportFactory, public Usage {
+export struct DefaultUsage : public ExportFactory,
+                             public Usage,
+                             public std::enable_shared_from_this<DefaultUsage> {
  protected:
-  struct BuiltTarget : public ModuleTarget {
+  struct DefaultUsageExport : public Export {
    private:
-    const std::string name;
-    const Path output;
-
-   public:
-    BuiltTarget(const std::string& name, const Path& output)
-        : name(name), output(output) {}
-
-    const std::string& getName() const override { return name; }
-
-    Path getOutput(const CtxWrapper&) const override { return output; };
-
-   protected:
-    std::optional<Ref<DepGraph::Node>> build(BuilderContext&) const override {
-      return std::nullopt;
-    }
-
-    std::unordered_map<std::string, Path> getModuleMap(
-        const CtxWrapper&) const override {
-      return std::unordered_map<std::string, Path>();
-    }
-  };
-
-  struct UsageExport : public Export {
-   private:
-    std::optional<ProjectFmtPath> pcmPath;
     std::string compileOption;
     std::string linkOption;
-    mutable std::unordered_map<std::string, BuiltTarget> cache;
 
    public:
-    UsageExport(std::optional<ProjectFmtPath> pcmPath,
-                std::string compileOption, std::string linkOption)
-        : pcmPath(pcmPath),
-          compileOption(compileOption),
-          linkOption(linkOption) {}
+    DefaultUsageExport(const std::string& compileOption,
+                       const std::string& linkOption)
+        : compileOption(compileOption), linkOption(linkOption) {}
 
     std::string getCompileOption() const override { return compileOption; }
 
     std::string getLinkOption() const override { return linkOption; }
-
-    std::optional<Ref<const ModuleTarget>> findPCM(
-        const std::string& moduleName) const override {
-      if (!pcmPath.has_value()) return std::nullopt;
-      const auto it = cache.find(moduleName);
-      if (it != cache.end())
-        return it->second;
-      else {
-        auto modulePath =
-            pcmPath.value() / (replace(moduleName, ':', '-') + ".pcm");
-        if (!fs::exists(modulePath)) return std::nullopt;
-        return cache
-            .emplace(std::piecewise_construct,
-                     std::forward_as_tuple(moduleName),
-                     std::forward_as_tuple(moduleName, modulePath))
-            .first->second;
-      }
-    };
   };
 
  public:
-  std::optional<ProjectFmtPath> pcmPath;
   ProjectFmtStr compileOption;
   ProjectFmtStr linkOption;
   std::vector<std::string> libs;
   std::unordered_set<PackagePath, PackagePath::Hash> packages;
 
-  std::shared_ptr<Export> create(const Context&) const override {
-    return std::make_shared<UsageExport>(pcmPath, getCompileOption(),
-                                         getLinkOption());
+  std::shared_ptr<const ExportFactory> getExportFactory(
+      const Context&, const std::string&, const Path&,
+      std::function<const ExFSet&(const Path&)>) const override {
+    return shared_from_this();
   }
 
-  std::string getCompileOption() const {
-    if (pcmPath.has_value())
-      return "-fprebuilt-module-path=" + pcmPath.value().generic_string() +
-             ' ' + compileOption;
-    else
-      return compileOption;
+  std::shared_ptr<Export> create(const Context&) const override {
+    return std::make_shared<DefaultUsageExport>(getCompileOption(),
+                                                getLinkOption());
   }
+
+  std::string getCompileOption() const { return compileOption; }
 
   std::string getLinkOption() const {
     std::string lo = linkOption;
@@ -178,8 +130,7 @@ export struct DefaultUsage : public ExportFactory, public Usage {
 
  private:
   BOOST_DESCRIBE_CLASS(DefaultUsage, (),
-                       (pcmPath, compileOption, linkOption, libs, packages), (),
-                       ())
+                       (compileOption, linkOption, libs, packages), (), ())
 };
 }  // namespace makeDotCpp
 

@@ -38,7 +38,7 @@ extern "C" int build(const ProjectContext &ctx) {
       .setBuild([&](const Context &ctx) {
         auto future = builder->build(ctx);
         future.get();
-        std::cout << green << "Done" << reset << std::endl;
+        logger::success() << "Done" << std::endl;
       })
       .setInstall([&](const Context &ctx) {
         if (ctx.install.empty()) {
@@ -56,14 +56,13 @@ extern "C" int build(const ProjectContext &ctx) {
         {
           const Path libPath = ctx.install / "lib";
           Project::ensureDirExists(libPath);
-          Project::updateAllFiles(ctx.pcmPath(), libPath);
+          Project::updateAllFiles(ctx.modulePath(), libPath);
         }
 
         { Project::updateFile("project.json", ctx.install); }
 
-        std::cout << green << "Installed " << ctx.name << reset << std::endl;
+        logger::success() << "Installed " << ctx.name << std::endl;
       })
-      .to("build-make-dot-cpp")
       .run(ctx.argc, ctx.argv);
   return 0;
 }

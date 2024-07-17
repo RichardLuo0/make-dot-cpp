@@ -72,16 +72,3 @@
    public:                                                              \
     const char *what() const noexcept override { return msg.c_str(); }; \
   };
-
-#define CACHED_FUNC(TYPE, NAME)                                          \
-  const TYPE &get##NAME() const {                                        \
-    if (!_##NAME##Opt.has_value()) _##NAME##Opt.emplace(_build##NAME()); \
-    return _##NAME##Opt.value();                                         \
-  }                                                                      \
-                                                                         \
- private:                                                                \
-  mutable std::optional<TYPE> _##NAME##Opt;                              \
-                                                                         \
-  inline TYPE _build##NAME() const
-
-#define INVALIDATE(NAME) _##NAME##Opt.reset()

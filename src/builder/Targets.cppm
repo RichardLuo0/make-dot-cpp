@@ -120,13 +120,13 @@ export struct UnitDeps : public Deps<ModuleTarget>, public FilesDeps {
   ModuleMap getModuleMap(std::unordered_set<const ModuleTarget *> visited,
                          const CtxWrapper &ctx) const {
     std::unordered_map<std::string, Path> map;
-    for (auto &mod : targetDeps) {
-      const auto &pcm = mod.get();
-      if (visited.contains(&pcm)) throw CyclicModuleDependency(visited);
-      visited.emplace(&pcm);
-      map.emplace(pcm.getName(), pcm.getOutput(ctx));
-      map.merge(pcm.getModuleMap(ctx));
-      visited.erase(&pcm);
+    for (auto &modRef : targetDeps) {
+      const auto &mod = modRef.get();
+      if (visited.contains(&mod)) throw CyclicModuleDependency(visited);
+      visited.emplace(&mod);
+      map.emplace(mod.getName(), mod.getOutput(ctx));
+      map.merge(mod.getModuleMap(ctx));
+      visited.erase(&mod);
     }
     return map;
   }
@@ -141,7 +141,7 @@ export struct UnitDeps : public Deps<ModuleTarget>, public FilesDeps {
                                         const Path &output) const {
     const auto nodeList = Deps::buildNodeList(ctx);
     const auto depsOutput = Deps::getDepsOutput(ctx);
-    return ctx.isNeedUpdate(output, concat<Path>(filesDeps, depsOutput))
+    return ctx.needsUpdate(output, concat<Path>(filesDeps, depsOutput))
                ? std::make_optional(nodeList)
                : std::nullopt;
   }
@@ -150,15 +150,16 @@ export struct UnitDeps : public Deps<ModuleTarget>, public FilesDeps {
   using FilesDeps::dependOn;
 };
 
-export struct PCMTarget : public UnitDeps, public CachedTarget<ModuleTarget> {
+export struct DepsModTarget : public UnitDeps,
+                              public CachedTarget<ModuleTarget> {
  private:
   const std::string name;
   const Path input;
   const Path output;
 
  public:
-  PCMTarget(const std::string &name, const Path &input, const Path &output,
-            const std::deque<Path> &includeDeps)
+  DepsModTarget(const std::string &name, const Path &input, const Path &output,
+                const std::deque<Path> &includeDeps)
       : UnitDeps(includeDeps), name(name), input(input), output(output) {}
 
   const std::string &getName() const override { return name; }
@@ -166,7 +167,7 @@ export struct PCMTarget : public UnitDeps, public CachedTarget<ModuleTarget> {
   const Path &getInput() const { return input; }
 
   Path getOutput(const CtxWrapper &ctx) const override {
-    return ctx.pcmPath() / output;
+    return ctx.modulePath() / output;
   };
 
   ModuleMap getModuleMap(const CtxWrapper &ctx) const override {
@@ -178,8 +179,8 @@ export struct PCMTarget : public UnitDeps, public CachedTarget<ModuleTarget> {
     const Path output = getOutput(ctx);
     auto nodeListOpt = UnitDeps::buildNodeList(ctx, output);
     if (nodeListOpt.has_value())
-      return ctx.compilePCM(input, getModuleMap(ctx), output,
-                            nodeListOpt.value());
+      return ctx.compileModule(input, getModuleMap(ctx), output,
+                               nodeListOpt.value());
     else
       return std::nullopt;
   }
@@ -187,7 +188,7 @@ export struct PCMTarget : public UnitDeps, public CachedTarget<ModuleTarget> {
 
 export struct ObjTarget : public CachedTarget<> {
  protected:
-  using IsModule = PCMTarget;
+  using IsModule = DepsModTarget;
 
   struct NotModule : public UnitDeps, public Target {
     const ObjTarget &parent;
@@ -219,8 +220,8 @@ export struct ObjTarget : public CachedTarget<> {
 
  public:
   ObjTarget(const Path &input, const std::deque<Path> &includeDeps,
-            const Path &output, const std::string &name, const Path &pcm)
-      : internal(std::in_place_type<IsModule>, name, input, pcm, includeDeps),
+            const Path &output, const std::string &name, const Path &mod)
+      : internal(std::in_place_type<IsModule>, name, input, mod, includeDeps),
         output(output) {}
 
   ObjTarget(const Path &input, const std::deque<Path> &includeDeps,
@@ -232,7 +233,7 @@ export struct ObjTarget : public CachedTarget<> {
     return ctx.objPath() / output;
   };
 
-  const PCMTarget &getPCM() { return std::get<IsModule>(internal); }
+  const ModuleTarget &getModule() { return std::get<IsModule>(internal); }
 
   void dependOn(const ModuleTarget &target) {
     std::visit([&](auto &&internal) { internal.dependOn(target); }, internal);
@@ -260,13 +261,13 @@ export struct ObjTarget : public CachedTarget<> {
           using T = std::decay_t<decltype(internal)>;
           if constexpr (std::is_same_v<T, IsModule>) {
             const auto output = getOutput(ctx);
-            const auto pcm = internal.getOutput(ctx);
-            if (ctx.isNeedUpdate(output, std::views::single(pcm)))
+            const auto mod = internal.getOutput(ctx);
+            if (ctx.needsUpdate(output, std::views::single(mod)))
               if (nodeOpt.has_value())
-                return ctx.compile(pcm, internal.getModuleMap(ctx), output,
+                return ctx.compile(mod, internal.getModuleMap(ctx), output,
                                    std::views::single(nodeOpt.value()));
               else
-                return ctx.compile(pcm, internal.getModuleMap(ctx), output);
+                return ctx.compile(mod, internal.getModuleMap(ctx), output);
             else
               return std::nullopt;
           } else
