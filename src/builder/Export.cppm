@@ -24,6 +24,8 @@ export struct Export {
 };
 
 export struct ExportFactory {
+  virtual ~ExportFactory() = default;
+
   // This is used for user build file to change behaviours in export.
   virtual void set([[maybe_unused]] const std::string& key,
                    [[maybe_unused]] const std::string& value) {}

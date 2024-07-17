@@ -117,7 +117,7 @@ export class Project {
   }
 
   void watch() {
-    // TODO
+    // TODO watch for changes
   }
 
   void clean() { fs::remove_all(ctx.output); }

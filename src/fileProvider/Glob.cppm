@@ -1,9 +1,7 @@
-module;
-#include "glob/glob.h"
-
 export module makeDotCpp.fileProvider.Glob;
 import std;
 import makeDotCpp.fileProvider;
+import glob;
 
 #include "alias.hpp"
 

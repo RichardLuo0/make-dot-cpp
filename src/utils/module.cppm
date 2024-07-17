@@ -151,17 +151,18 @@ Merge<T> tag_invoke(const json::value_to_tag<Merge<T>>&, const json::value& jv,
   Merge<T> t;
   const auto obj = jv.as_object();
   using namespace boost::describe;
-  boost::mp11::mp_for_each<describe_members<T, mod_public>>([&](auto&& m) {
-    auto& member = t.*m.pointer;
-    using memberType = std::remove_reference_t<decltype(member)>;
-    const auto* value = obj.if_contains(m.name);
-    if (value) {
-      auto cValue =
-          json::try_value_to<memberType>(*value, std::forward<Ctx>(ctx));
-      if (cValue) member = std::move(*cValue);
-    } else if (isRequired<memberType>::value)
-      throw RequiredJsonMember(m.name);
-  });
+  boost::mp11::mp_for_each<describe_members<T, mod_any_access | mod_inherited>>(
+      [&](auto&& m) {
+        auto& member = t.*m.pointer;
+        using memberType = std::remove_reference_t<decltype(member)>;
+        const auto* value = obj.if_contains(m.name);
+        if (value) {
+          auto cValue =
+              json::try_value_to<memberType>(*value, std::forward<Ctx>(ctx));
+          if (cValue) member = std::move(*cValue);
+        } else if (isRequired<memberType>::value)
+          throw RequiredJsonMember(m.name);
+      });
   return t;
 }
 

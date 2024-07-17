@@ -6,3 +6,4 @@ export import :Builder;
 export import :ObjBuilder;
 export import :ExeBuilder;
 export import :LibBuilder;
+export import :ModuleBuilder;

@@ -7,7 +7,7 @@ import std;
 import makeDotCpp;
 import makeDotCpp.compiler;
 import makeDotCpp.builder;
-import makeDotCpp.thread;
+import makeDotCpp.fileProvider.Glob;
 import makeDotCpp.utils;
 import boost.json;
 import boost.dll;
@@ -96,6 +96,8 @@ export struct DefaultUsage : public ExportFactory,
     std::string getLinkOption() const override { return linkOption; }
   };
 
+  mutable std::shared_ptr<Export> cachedEx;
+
  public:
   ProjectFmtStr compileOption;
   ProjectFmtStr linkOption;
@@ -109,8 +111,10 @@ export struct DefaultUsage : public ExportFactory,
   }
 
   std::shared_ptr<Export> create(const Context&) const override {
-    return std::make_shared<DefaultUsageExport>(getCompileOption(),
-                                                getLinkOption());
+    if (cachedEx == nullptr)
+      cachedEx = std::make_shared<DefaultUsageExport>(getCompileOption(),
+                                                      getLinkOption());
+    return cachedEx;
   }
 
   std::string getCompileOption() const { return compileOption; }
@@ -132,6 +136,46 @@ export struct DefaultUsage : public ExportFactory,
   BOOST_DESCRIBE_CLASS(DefaultUsage, (),
                        (compileOption, linkOption, libs, packages), (), ())
 };
+
+export struct ModuleUsage : public DefaultUsage {
+ protected:
+  struct ModuleUsageExport : public DefaultUsageExport {
+   private:
+    std::shared_ptr<Export> ex;
+
+   public:
+    ModuleUsageExport(const std::shared_ptr<Export>& ex,
+                      const std::string& compileOption,
+                      const std::string& linkOption)
+        : DefaultUsageExport(compileOption, linkOption), ex(ex) {}
+
+    std::optional<Ref<const ModuleTarget>> findModule(
+        const std::string& moduleName) const override {
+      return ex->findModule(moduleName);
+    }
+  };
+
+ public:
+  Required<ProjectFmtStr> moduleFileGlob;
+
+  std::shared_ptr<const ExportFactory> getExportFactory(
+      const Context& ctx, const std::string& name, const Path&,
+      std::function<const ExFSet&(const Path&)>) const override {
+    ModuleBuilder builder(name);
+    builder.addSrc(Glob(moduleFileGlob));
+    fs::create_directories(ctx.output);
+    cachedEx = std::make_shared<ModuleUsageExport>(
+        builder.create(ctx), getCompileOption(), getLinkOption());
+    return shared_from_this();
+  }
+
+  std::shared_ptr<Export> create(const Context&) const override {
+    return cachedEx;
+  }
+
+ private:
+  BOOST_DESCRIBE_CLASS(ModuleUsage, (DefaultUsage), (moduleFileGlob), (), ())
+};
 }  // namespace makeDotCpp
 
 namespace boost {
@@ -141,5 +185,7 @@ template <>
 struct is_described_class<CustomUsage> : std::true_type {};
 template <>
 struct is_described_class<DefaultUsage> : std::true_type {};
+template <>
+struct is_described_class<ModuleUsage> : std::true_type {};
 }  // namespace json
 }  // namespace boost

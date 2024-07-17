@@ -27,6 +27,7 @@ struct CachedTarget : public T {
   mutable std::optional<Ref<Node>> node;
 
  public:
+  // FIXME Possibly different ctx?
   std::optional<Ref<Node>> build(BuilderContext &ctx) const override {
     if (!isBuilt) {
       node = onBuild(ctx);
@@ -42,7 +43,7 @@ struct CachedTarget : public T {
   virtual std::optional<Ref<Node>> onBuild(BuilderContext &ctx) const = 0;
 };
 
-export struct : public Target {
+export const struct : public Target {
   Path getOutput(const CtxWrapper &) const override { return Path(); }
   std::optional<Ref<Node>> build(BuilderContext &) const override {
     return std::nullopt;

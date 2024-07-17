@@ -67,6 +67,8 @@ export std::shared_ptr<Usage> tag_invoke(
   const auto type = typePtr ? (*typePtr).as_string() : "";
   if (type == "custom")
     return json::value_to<std::shared_ptr<Merge<CustomUsage>>>(jv, ctx);
+  if (type == "module")
+    return json::value_to<std::shared_ptr<Merge<ModuleUsage>>>(jv, ctx);
   else
     return json::value_to<std::shared_ptr<Merge<DefaultUsage>>>(jv, ctx);
 }
