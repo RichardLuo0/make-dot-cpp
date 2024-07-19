@@ -31,12 +31,11 @@ export const std::string findExecutable(const std::string &name) {
 
 export const Result run(const std::string &command) {
   Result result{command};
-  bp::ipstream outIs;
-  bp::ipstream errIs;
-  bp::child child(command, bp::std_out > outIs, bp::std_err > errIs);
+  bp::ipstream is;
+  bp::child child(command, (bp::std_out & bp::std_err) > is);
   std::error_code ec;
   std::string line;
-  while (child.running(ec) && std::getline(errIs, line) && !line.empty()) {
+  while (child.running(ec) && std::getline(is, line)) {
     result.output += line + '\n';
     if (ec) {
       logger::error() << result.output << std::endl;
@@ -44,8 +43,8 @@ export const Result run(const std::string &command) {
     }
   }
   child.wait();
+  while (std::getline(is, line)) result.output += line + '\n';
   result.status = child.exit_code();
-  while (std::getline(outIs, line)) result.output += line + '\n';
   return result;
 }
 

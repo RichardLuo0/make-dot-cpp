@@ -23,24 +23,22 @@ export struct Target {
 export template <class T = Target>
 struct CachedTarget : public T {
  private:
-  mutable bool isBuilt = false;
-  mutable std::optional<Ref<Node>> node;
+  mutable std::unordered_map<Path, std::optional<Ref<Node>>> nodeCache;
 
  public:
-  // FIXME Possibly different ctx?
   std::optional<Ref<Node>> build(BuilderContext &ctx) const override {
-    if (!isBuilt) {
-      node = onBuild(ctx);
-      isBuilt = true;
-    }
-    return node;
+    const auto output = this->getOutput(ctx);
+    auto it = nodeCache.find(output);
+    if (it != nodeCache.end()) return it->second;
+    return nodeCache.emplace(output, onBuild(ctx, output)).first->second;
   };
 
  protected:
   // Make sure target has been built.
   // 1. Build target.
   // 2. Return corresponding node
-  virtual std::optional<Ref<Node>> onBuild(BuilderContext &ctx) const = 0;
+  virtual std::optional<Ref<Node>> onBuild(BuilderContext &ctx,
+                                           const Path &output) const = 0;
 };
 
 export const struct : public Target {
@@ -176,8 +174,8 @@ export struct DepsModTarget : public UnitDeps,
   }
 
  protected:
-  std::optional<Ref<Node>> onBuild(BuilderContext &ctx) const override {
-    const Path output = getOutput(ctx);
+  std::optional<Ref<Node>> onBuild(BuilderContext &ctx,
+                                   const Path &output) const override {
     auto nodeListOpt = UnitDeps::buildNodeList(ctx, output);
     if (nodeListOpt.has_value())
       return ctx.compileModule(input, getModuleMap(ctx), output,
@@ -245,7 +243,8 @@ export struct ObjTarget : public CachedTarget<> {
   }
 
  protected:
-  std::optional<Ref<Node>> onBuild(BuilderContext &ctx) const override {
+  std::optional<Ref<Node>> onBuild(BuilderContext &ctx,
+                                   const Path &output) const override {
     // Record compile command for generating compile_commands.json
     std::visit(
         [&](auto &&internal) {
@@ -261,7 +260,6 @@ export struct ObjTarget : public CachedTarget<> {
           auto nodeOpt = internal.build(ctx);
           using T = std::decay_t<decltype(internal)>;
           if constexpr (std::is_same_v<T, IsModule>) {
-            const auto output = getOutput(ctx);
             const auto mod = internal.getOutput(ctx);
             if (ctx.needsUpdate(output, std::views::single(mod)))
               if (nodeOpt.has_value())

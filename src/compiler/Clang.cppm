@@ -10,8 +10,9 @@ import boost.json;
 namespace makeDotCpp {
 export class Clang : public Compiler {
  public:
-  DEF_EXCEPTION(ScanDepsError, (const Path &input),
-                "scanning deps: " + input.generic_string());
+  DEF_EXCEPTION(ScanDepsError, (const Path &input, const std::string msg),
+                "error occurs when scanning deps: " + input.generic_string() +
+                    ": " + msg);
 
  private:
   std::string compileOption;
@@ -109,7 +110,7 @@ export class Clang : public Compiler {
     const auto result = process::run(
         std::format("{} {} {} -MM {}", process::findExecutable("clang++"),
                     compileOption, extraOptions, input.generic_string()));
-    if (result.status != 0) throw ScanDepsError(input);
+    if (result.status != 0) throw ScanDepsError(input, result.output);
     const auto &output = result.output;
     std::deque<Path> deps;
     bool isStart = false;
@@ -146,7 +147,7 @@ export class Clang : public Compiler {
     const auto result = process::run(
         process::findExecutable("clang-scan-deps") + " -format=p1689 -- " +
         compileCommand(input, "test", false, {}, extraOptions));
-    if (result.status != 0) throw ScanDepsError(input);
+    if (result.status != 0) throw ScanDepsError(input, result.output);
     const json::object rule = json::parse(result.output)
                                   .as_object()
                                   .at("rules")

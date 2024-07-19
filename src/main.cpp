@@ -111,7 +111,7 @@ class BuildFileProject {
     const std::string& name = projectDesc.name;
     packageExports.emplace(
         name, buildPackage(projectDesc, ctx.output / "packages" / name,
-                           projectJsonPath));
+                           projectJsonPath, false));
   }
 
   const ExFSet& buildGlobalPackage(const Path& path) {
@@ -130,7 +130,7 @@ class BuildFileProject {
       const auto& projectDesc = getProjectDesc(projectJsonPath);
       ExFSet exSet{buildPackage(projectDesc,
                                 projectJsonPath.parent_path() / ".build",
-                                projectJsonPath)};
+                                projectJsonPath, true)};
       for (auto& path : projectDesc.getUsagePackages()) {
         auto& packages = buildGlobalPackageR(path);
         exSet.insert(packages.begin(), packages.end());
@@ -144,11 +144,11 @@ class BuildFileProject {
 
   std::shared_ptr<const ExportFactory> buildPackage(
       const ProjectDesc& projectDesc, const Path& output,
-      const Path& projectJsonPath) {
+      const Path& projectJsonPath, bool isGlobal) {
     Context pCtx{
         .name = projectDesc.name, .output = output, .compiler = ctx.compiler};
     return projectDesc.getExportFactory(
-        pCtx, projectJsonPath.parent_path(),
+        pCtx, isGlobal, projectJsonPath.parent_path(),
         std::bind(&BuildFileProject::buildGlobalPackage, this,
                   std::placeholders::_1));
   }
@@ -241,7 +241,7 @@ int main(int argc, const char** argv) {
       generateCompileCommands(project.getContext(), api::compileCommands);
     return ret;
   } catch (const std::exception& e) {
-    logger::error() << "Error: " << e.what() << std::endl;
+    logger::error() << "error: " << e.what() << std::endl;
     return 1;
   }
 }

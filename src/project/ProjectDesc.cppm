@@ -49,11 +49,30 @@ export struct ProjectDesc {
     return usage->getPackages();
   }
 
+ private:
+  class GlobalExportFactory : public ExportFactory {
+    const std::string name;
+    const std::shared_ptr<Export> ex;
+
+   public:
+    GlobalExportFactory(const std::string& name,
+                        const std::shared_ptr<Export>& ex)
+        : name(name), ex(ex) {}
+
+    const std::string& getName() const override { return name; };
+
+    std::shared_ptr<Export> create(const Context&) const override { return ex; }
+  };
+
+ public:
   std::shared_ptr<const ExportFactory> getExportFactory(
-      const Context& ctx, const Path& projectPath,
+      const Context& ctx, bool isGlobal, const Path& projectPath,
       std::function<const ExFSet&(const Path&)> buildPackage) const {
     if (usage == nullptr) throw UsageNotDefined(name);
-    return usage->getExportFactory(ctx, name, projectPath, buildPackage);
+    auto exf = usage->getExportFactory(ctx, name, projectPath, buildPackage);
+    return isGlobal ? std::make_shared<GlobalExportFactory>(exf->getName(),
+                                                            exf->create(ctx))
+                    : exf;
   }
 
  private:
@@ -67,8 +86,6 @@ export std::shared_ptr<Usage> tag_invoke(
   const auto type = typePtr ? (*typePtr).as_string() : "";
   if (type == "custom")
     return json::value_to<std::shared_ptr<Merge<CustomUsage>>>(jv, ctx);
-  if (type == "module")
-    return json::value_to<std::shared_ptr<Merge<ModuleUsage>>>(jv, ctx);
   else
     return json::value_to<std::shared_ptr<Merge<DefaultUsage>>>(jv, ctx);
 }

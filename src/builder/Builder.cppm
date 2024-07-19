@@ -204,6 +204,7 @@ export class Builder {
 
   void updateEverything(const Context &ctx) const {
     updateExportSet(ctx);
+    // exSet is prepared here
     updateExportTargetList();
     updateCompilerOptions();
     updateCompileOptionsJson(ctx);

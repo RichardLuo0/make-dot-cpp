@@ -62,7 +62,8 @@ export class ObjBuilder : public Builder {
             moduleMap.emplace(dep, mod);
             target.dependOn(mod);
           } else
-            logger::warn() << unit.input << ": module not found: " << dep;
+            logger::warn() << unit.input << ": module not found: " << dep
+                           << std::endl;
         }
       }
     }

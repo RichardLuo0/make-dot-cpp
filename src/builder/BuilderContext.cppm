@@ -165,9 +165,9 @@ export struct BuilderContextChild : public BuilderContext {
   BuilderContext &parent;
 
  public:
-  BuilderContextChild(LRef<BuilderContext> parent,
+  BuilderContextChild(LRef<BuilderContext> parent, CLRef<Context> ctx,
                       const CompilerOptions &compilerOptions)
-      : BuilderContext(parent.ctx, compilerOptions), parent(parent) {
+      : BuilderContext(ctx, compilerOptions), parent(parent) {
     vfs.merge(parent.vfs);
     id = parent.id;
   }

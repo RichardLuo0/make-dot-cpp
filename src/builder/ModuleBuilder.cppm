@@ -13,7 +13,8 @@ namespace makeDotCpp {
 export struct AllModulesTarget : public CachedTarget<>, public Deps<> {
   Path getOutput(const CtxWrapper &) const override { return Path(); }
 
-  std::optional<Ref<Node>> onBuild(BuilderContext &ctx) const override {
+  std::optional<Ref<Node>> onBuild(BuilderContext &ctx,
+                                   const Path &) const override {
     Deps::buildNodeList(ctx);
     return std::nullopt;
   }
@@ -66,6 +67,8 @@ export class ModuleBuilder : public ObjBuilder, public CachedExportFactory {
 
  public:
   using ObjBuilder::ObjBuilder;
+
+  const std::string &getName() const override { return name; }
 
   std::shared_ptr<Export> onCreate(const Context &ctx) const override {
     updateEverything(ctx);

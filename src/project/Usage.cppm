@@ -22,11 +22,8 @@ export struct Usage {
   virtual ~Usage() = default;
 
   virtual std::shared_ptr<const ExportFactory> getExportFactory(
-      [[maybe_unused]] const Context& ctx,
-      [[maybe_unused]] const std::string& name,
-      [[maybe_unused]] const Path& projectPath,
-      [[maybe_unused]] std::function<const ExFSet&(const Path&)> buildPackage)
-      const = 0;
+      const Context& ctx, const std::string& name, const Path& projectPath,
+      std::function<const ExFSet&(const Path&)> buildPackage) const = 0;
 
   virtual const std::unordered_set<PackagePath, PackagePath::Hash>&
   getPackages() const = 0;
@@ -62,9 +59,9 @@ export struct CustomUsage : public Usage {
     fs::create_directories(ctx.output);
     auto result = builder.build(ctx);
     result.get();
-    auto lib = std::make_shared<boost::dll::shared_library>(
+    auto dll = std::make_shared<boost::dll::shared_library>(
         builder.getOutput(ctx).generic_string());
-    return {lib, &lib->get<ExportFactory&>("exportFactory")};
+    return {dll, &dll->get<ExportFactory&>("exportFactory")};
   }
 
   const std::unordered_set<PackagePath, PackagePath::Hash>& getPackages()
@@ -77,18 +74,16 @@ export struct CustomUsage : public Usage {
                        ())
 };
 
-export struct DefaultUsage : public ExportFactory,
-                             public Usage,
-                             public std::enable_shared_from_this<DefaultUsage> {
+export struct DefaultUsage : public Usage {
  protected:
-  struct DefaultUsageExport : public Export {
+  struct DefaultExport : public Export {
    private:
-    std::string compileOption;
-    std::string linkOption;
+    const std::string compileOption;
+    const std::string linkOption;
 
    public:
-    DefaultUsageExport(const std::string& compileOption,
-                       const std::string& linkOption)
+    DefaultExport(const std::string& compileOption,
+                  const std::string& linkOption)
         : compileOption(compileOption), linkOption(linkOption) {}
 
     std::string getCompileOption() const override { return compileOption; }
@@ -96,25 +91,85 @@ export struct DefaultUsage : public ExportFactory,
     std::string getLinkOption() const override { return linkOption; }
   };
 
-  mutable std::shared_ptr<Export> cachedEx;
+  struct DefaultExportFactory : public ExportFactory {
+   private:
+    const std::string name;
+    const std::shared_ptr<Export> ex;
+
+   public:
+    DefaultExportFactory(const std::string& name,
+                         const std::shared_ptr<Export>& ex)
+        : name(name), ex(ex) {}
+
+    const std::string& getName() const override { return name; };
+
+    std::shared_ptr<Export> create(const Context&) const override { return ex; }
+  };
+
+  struct ModuleExport : public DefaultExport {
+   private:
+    const std::shared_ptr<Export> ex;
+
+   public:
+    ModuleExport(const std::shared_ptr<Export>& ex,
+                 const std::string& compileOption,
+                 const std::string& linkOption)
+        : DefaultExport(compileOption, linkOption), ex(ex) {}
+
+    std::optional<Ref<const ModuleTarget>> findModule(
+        const std::string& moduleName) const override {
+      return ex->findModule(moduleName);
+    }
+
+    virtual std::optional<Ref<const Target>> getTarget() const override {
+      return ex->getTarget();
+    }
+  };
+
+  struct ModuleExportFactory : public CachedExportFactory {
+   private:
+    const std::string name;
+    const LibBuilder builder;
+    const std::string compileOption;
+    const std::string linkOption;
+
+   public:
+    ModuleExportFactory(const std::string& name, LibBuilder&& builder,
+                        const std::string& compileOption,
+                        const std::string& linkOption)
+        : name(name),
+          builder(builder),
+          compileOption(compileOption),
+          linkOption(linkOption) {}
+
+    const std::string& getName() const override { return name; };
+
+    std::shared_ptr<Export> onCreate(const Context& ctx) const override {
+      return std::make_shared<ModuleExport>(builder.create(ctx), compileOption,
+                                            linkOption);
+    }
+  };
 
  public:
+  std::optional<ProjectFmtStr> moduleFileGlob;
   ProjectFmtStr compileOption;
   ProjectFmtStr linkOption;
   std::vector<std::string> libs;
   std::unordered_set<PackagePath, PackagePath::Hash> packages;
 
   std::shared_ptr<const ExportFactory> getExportFactory(
-      const Context&, const std::string&, const Path&,
+      const Context&, const std::string& name, const Path&,
       std::function<const ExFSet&(const Path&)>) const override {
-    return shared_from_this();
-  }
-
-  std::shared_ptr<Export> create(const Context&) const override {
-    if (cachedEx == nullptr)
-      cachedEx = std::make_shared<DefaultUsageExport>(getCompileOption(),
-                                                      getLinkOption());
-    return cachedEx;
+    if (moduleFileGlob != std::nullopt) {
+      LibBuilder builder(name);
+      builder.addSrc(Glob(moduleFileGlob.value()));
+      return std::make_shared<ModuleExportFactory>(
+          name, std::move(builder), getCompileOption(), getLinkOption());
+    } else {
+      return std::make_shared<DefaultExportFactory>(
+          name,
+          std::make_shared<DefaultExport>(getCompileOption(), getLinkOption()));
+    }
   }
 
   std::string getCompileOption() const { return compileOption; }
@@ -134,47 +189,9 @@ export struct DefaultUsage : public ExportFactory,
 
  private:
   BOOST_DESCRIBE_CLASS(DefaultUsage, (),
-                       (compileOption, linkOption, libs, packages), (), ())
-};
-
-export struct ModuleUsage : public DefaultUsage {
- protected:
-  struct ModuleUsageExport : public DefaultUsageExport {
-   private:
-    std::shared_ptr<Export> ex;
-
-   public:
-    ModuleUsageExport(const std::shared_ptr<Export>& ex,
-                      const std::string& compileOption,
-                      const std::string& linkOption)
-        : DefaultUsageExport(compileOption, linkOption), ex(ex) {}
-
-    std::optional<Ref<const ModuleTarget>> findModule(
-        const std::string& moduleName) const override {
-      return ex->findModule(moduleName);
-    }
-  };
-
- public:
-  Required<ProjectFmtStr> moduleFileGlob;
-
-  std::shared_ptr<const ExportFactory> getExportFactory(
-      const Context& ctx, const std::string& name, const Path&,
-      std::function<const ExFSet&(const Path&)>) const override {
-    ModuleBuilder builder(name);
-    builder.addSrc(Glob(moduleFileGlob));
-    fs::create_directories(ctx.output);
-    cachedEx = std::make_shared<ModuleUsageExport>(
-        builder.create(ctx), getCompileOption(), getLinkOption());
-    return shared_from_this();
-  }
-
-  std::shared_ptr<Export> create(const Context&) const override {
-    return cachedEx;
-  }
-
- private:
-  BOOST_DESCRIBE_CLASS(ModuleUsage, (DefaultUsage), (moduleFileGlob), (), ())
+                       (moduleFileGlob, compileOption, linkOption, libs,
+                        packages),
+                       (), ())
 };
 }  // namespace makeDotCpp
 
@@ -185,7 +202,5 @@ template <>
 struct is_described_class<CustomUsage> : std::true_type {};
 template <>
 struct is_described_class<DefaultUsage> : std::true_type {};
-template <>
-struct is_described_class<ModuleUsage> : std::true_type {};
 }  // namespace json
 }  // namespace boost

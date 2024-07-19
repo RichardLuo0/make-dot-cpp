@@ -28,10 +28,10 @@ export struct ExeTarget : public CachedTarget<>,
     return ExeTarget::getOutput(ctx.ctx, name);
   }
 
-  std::optional<Ref<Node>> onBuild(BuilderContext &ctx) const override {
+  std::optional<Ref<Node>> onBuild(BuilderContext &ctx,
+                                   const Path &output) const override {
     const auto nodeList = Deps::buildNodeList(ctx);
     const auto depsOutput = Deps::getDepsOutput(ctx);
-    const Path output = getOutput(ctx);
     if (ctx.needsUpdate(output, depsOutput)) {
       return ctx.link(depsOutput, output, nodeList);
     }

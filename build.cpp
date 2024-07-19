@@ -11,7 +11,6 @@ import makeDotCpp.thread.logger;
 
 using namespace makeDotCpp;
 using namespace api;
-using namespace logger;
 
 extern "C" int build(const ProjectContext &ctx) {
   ctx.compiler->addOption("-march=native -O3 -std=c++20 -Wall -Wextra")

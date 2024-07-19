@@ -26,9 +26,12 @@ export struct Export {
 export struct ExportFactory {
   virtual ~ExportFactory() = default;
 
+  virtual const std::string& getName() const = 0;
+
   // This is used for user build file to change behaviours in export.
   virtual void set([[maybe_unused]] const std::string& key,
                    [[maybe_unused]] const std::string& value) {}
+
   virtual std::shared_ptr<Export> create(const Context& ctx) const = 0;
 };
 

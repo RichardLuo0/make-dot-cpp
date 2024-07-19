@@ -2,6 +2,7 @@ export module makeDotCpp.builder:TargetProxy;
 import :Targets;
 import :BuilderContext;
 import std;
+import makeDotCpp;
 import makeDotCpp.utils;
 
 namespace makeDotCpp {
@@ -9,19 +10,26 @@ export template <class T = Target>
 struct TargetProxy : public T {
  protected:
   const T &target;
+
+  const Context *ctx = nullptr;
   const CompilerOptions &compilerOptions;
 
  public:
   TargetProxy(CLRef<T> target, CLRef<CompilerOptions> compilerOptions)
       : target(target), compilerOptions(compilerOptions) {}
 
+  TargetProxy(CLRef<T> target, CLRef<Context> ctx,
+              CLRef<CompilerOptions> compilerOptions)
+      : target(target), ctx(&ctx), compilerOptions(compilerOptions) {}
+
   std::optional<Ref<Node>> build(BuilderContext &parent) const override {
-    BuilderContextChild child(parent, compilerOptions);
+    BuilderContextChild child(parent, ctx != nullptr ? *ctx : parent.ctx,
+                              compilerOptions);
     return target.build(child);
   }
 
-  Path getOutput(const CtxWrapper &ctx) const override {
-    return target.getOutput(ctx);
+  Path getOutput(const CtxWrapper &parent) const override {
+    return target.getOutput(ctx != nullptr ? CtxWrapper(*ctx) : parent);
   }
 
   struct EqualTo {
@@ -52,8 +60,8 @@ export struct ModuleTargetProxy : public TargetProxy<ModuleTarget> {
 
   const std::string &getName() const override { return target.getName(); };
 
-  ModuleMap getModuleMap(const CtxWrapper &ctx) const override {
-    return target.getModuleMap(ctx);
+  ModuleMap getModuleMap(const CtxWrapper &parent) const override {
+    return target.getModuleMap(ctx != nullptr ? CtxWrapper(*ctx) : parent);
   }
 };
 }  // namespace makeDotCpp

@@ -30,10 +30,10 @@ export struct LibTarget : public CachedTarget<>, public Deps<> {
     return LibTarget::getOutput(ctx.ctx, name, isShared);
   }
 
-  std::optional<Ref<Node>> onBuild(BuilderContext &ctx) const override {
+  std::optional<Ref<Node>> onBuild(BuilderContext &ctx,
+                                   const Path &output) const override {
     const auto nodeList = Deps::buildNodeList(ctx);
     const auto depsOutput = Deps::getDepsOutput(ctx);
-    const Path output = getOutput(ctx);
     if (ctx.needsUpdate(output, depsOutput)) {
       return isShared ? ctx.createSharedLib(depsOutput, output, nodeList)
                       : ctx.archive(depsOutput, output, nodeList);
@@ -71,6 +71,7 @@ export class LibBuilder : public ObjBuilder, public CachedExportFactory {
 
  protected:
   struct LibExport : public Export {
+    const Context ctx;
     const CompilerOptions compilerOptions;
     ModuleMap moduleMap;
     const TargetList targetList;
@@ -82,16 +83,18 @@ export class LibBuilder : public ObjBuilder, public CachedExportFactory {
    protected:
     auto getFromCache(const Ref<const ModuleTarget> &target) const {
       const auto it = proxyCache.find(target.get());
-      return std::ref(it != proxyCache.end()
-                          ? *it
-                          : *proxyCache.emplace(target, compilerOptions).first);
+      return std::ref(
+          it != proxyCache.end()
+              ? *it
+              : *proxyCache.emplace(target, ctx, compilerOptions).first);
     }
 
    public:
     LibExport(const LibBuilder &builder, const Context &ctx)
-        : compilerOptions(builder.getCompilerOptions()),
+        : ctx(ctx),
+          compilerOptions(builder.getCompilerOptions()),
           targetList(builder.onBuild(ctx, moduleMap)),
-          target(targetList.getTarget(), compilerOptions) {}
+          target(targetList.getTarget(), this->ctx, compilerOptions) {}
 
     std::optional<Ref<const ModuleTarget>> findModule(
         const std::string &moduleName) const override {
@@ -107,6 +110,8 @@ export class LibBuilder : public ObjBuilder, public CachedExportFactory {
   };
 
  public:
+  const std::string &getName() const override { return name; }
+
   std::shared_ptr<Export> onCreate(const Context &ctx) const override {
     updateEverything(ctx);
     return std::make_shared<LibExport>(*this, ctx);
