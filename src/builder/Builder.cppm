@@ -86,7 +86,7 @@ export class Builder {
   const Path cache = "cache/" + name;
 
  private:
-  CompilerOptions compilerOptions;
+  CompilerOption compilerOptions;
 
  protected:
 #define GENERATE_OPTIONS_JSON_METHOD(NAME, OPTIONS)        \
@@ -155,7 +155,7 @@ export class Builder {
         const auto depJson = parseJson(depJsonPath);
         unitList.emplace_back(json::value_to<Unit>(depJson));
       } else {
-        const auto compileOption = getCompilerOptions().compileOption;
+        const auto compileOption = getCompilerOption().compileOption;
         const auto info = ctx.compiler->getModuleInfo(input, compileOption);
         auto &unit = unitList.emplace_back(
             input, info.exported, info.name,
@@ -191,7 +191,7 @@ export class Builder {
       if (target.has_value()) exTargetList.emplace_back(target.value());
     }
   }
-  GENERATE_UPDATE_GET(CompilerOptions, co, CompilerOptions) {
+  GENERATE_UPDATE_GET(CompilerOption, co, CompilerOption) {
     co = {};
     for (auto &ex : exSet) {
       co.compileOption += ' ' + ex->getCompileOption();
@@ -206,7 +206,7 @@ export class Builder {
     updateExportSet(ctx);
     // exSet is prepared here
     updateExportTargetList();
-    updateCompilerOptions();
+    updateCompilerOption();
     updateCompileOptionsJson(ctx);
     updateLinkOptionsJson(ctx);
   }
@@ -214,13 +214,12 @@ export class Builder {
   virtual TargetList onBuild(const Context &ctx) const = 0;
 
  public:
-  // Do not call build() on same ctx sequentially.
-  // This will cause race condition.
+  // Do not call build() on same ctx sequentially. May cause race condition.
   virtual FutureList build(const Context &ctx) const {
     updateEverything(ctx);
     const auto targetList = onBuild(ctx);
     const auto &target = targetList.getTarget();
-    BuilderContext builderCtx{ctx, getCompilerOptions()};
+    BuilderContext builderCtx{ctx, getCompilerOption()};
     target.build(builderCtx);
     ctx.run();
     return builderCtx.takeFutureList();

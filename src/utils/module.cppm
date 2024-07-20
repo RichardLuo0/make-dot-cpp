@@ -95,7 +95,8 @@ export inline std::string readAsStr(const Path& path) {
 
 export inline json::value parseJson(const Path& path) {
   const auto input = readAsStr(path);
-  return json::parse(input);
+  return json::parse(input, {},
+                     {.allow_comments = true, .allow_trailing_commas = true});
 }
 
 export inline Path commonBase(const ranges::range<Path> auto& pathList) {

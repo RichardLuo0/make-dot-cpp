@@ -126,32 +126,35 @@ export struct DefaultUsage : public Usage {
     }
   };
 
+  template <class Exf>
+    requires std::is_base_of_v<ExportFactory, Exf>
   struct ModuleExportFactory : public CachedExportFactory {
    private:
     const std::string name;
-    const LibBuilder builder;
+    const Exf exf;
     const std::string compileOption;
     const std::string linkOption;
 
    public:
-    ModuleExportFactory(const std::string& name, LibBuilder&& builder,
+    ModuleExportFactory(const std::string& name, Exf&& exf,
                         const std::string& compileOption,
                         const std::string& linkOption)
         : name(name),
-          builder(builder),
+          exf(exf),
           compileOption(compileOption),
           linkOption(linkOption) {}
 
     const std::string& getName() const override { return name; };
 
     std::shared_ptr<Export> onCreate(const Context& ctx) const override {
-      return std::make_shared<ModuleExport>(builder.create(ctx), compileOption,
+      return std::make_shared<ModuleExport>(exf.create(ctx), compileOption,
                                             linkOption);
     }
   };
 
  public:
   std::optional<ProjectFmtStr> moduleFileGlob;
+  bool needsCompile = false;
   ProjectFmtStr compileOption;
   ProjectFmtStr linkOption;
   std::vector<std::string> libs;
@@ -161,10 +164,15 @@ export struct DefaultUsage : public Usage {
       const Context&, const std::string& name, const Path&,
       std::function<const ExFSet&(const Path&)>) const override {
     if (moduleFileGlob != std::nullopt) {
-      LibBuilder builder(name);
-      builder.addSrc(Glob(moduleFileGlob.value()));
-      return std::make_shared<ModuleExportFactory>(
-          name, std::move(builder), getCompileOption(), getLinkOption());
+      auto createFactory =
+          [&]<class B>() -> std::shared_ptr<const ExportFactory> {
+        B builder(name);
+        builder.addSrc(Glob(moduleFileGlob.value()));
+        return std::make_shared<ModuleExportFactory<B>>(
+            name, std::move(builder), getCompileOption(), getLinkOption());
+      };
+      return needsCompile ? createFactory.template operator()<LibBuilder>()
+                          : createFactory.template operator()<ModuleBuilder>();
     } else {
       return std::make_shared<DefaultExportFactory>(
           name,
@@ -189,8 +197,8 @@ export struct DefaultUsage : public Usage {
 
  private:
   BOOST_DESCRIBE_CLASS(DefaultUsage, (),
-                       (moduleFileGlob, compileOption, linkOption, libs,
-                        packages),
+                       (moduleFileGlob, needsCompile, compileOption, linkOption,
+                        libs, packages),
                        (), ())
 };
 }  // namespace makeDotCpp

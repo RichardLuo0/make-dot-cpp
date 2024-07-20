@@ -22,7 +22,7 @@ export struct AllModulesTarget : public CachedTarget<>, public Deps<> {
 
 export class ModuleBuilder : public ObjBuilder, public CachedExportFactory {
  protected:
-  TargetList onBuild(const Context &ctx, ModuleMap &map) const {
+  virtual TargetList onBuild(const Context &ctx, ModuleMap &map) const {
     TargetList list(std::in_place_type<AllModulesTarget>);
     auto &target = list.getTarget<AllModulesTarget>();
     target.dependOn(list.append(buildObjTargetList(ctx, map)));
@@ -35,25 +35,34 @@ export class ModuleBuilder : public ObjBuilder, public CachedExportFactory {
     return onBuild(ctx, map);
   }
 
+ public:
+  using ObjBuilder::ObjBuilder;
+
+  Path getOutput(const Context &) const override { return Path(); }
+
+ protected:
   struct ModuleExport : public Export {
-    const CompilerOptions compilerOptions;
+   protected:
+    const Context ctx;
+    const CompilerOption compilerOptions;
     ModuleMap moduleMap;
     const TargetList targetList;
     mutable std::unordered_set<ModuleTargetProxy, ModuleTargetProxy::Hash,
                                ModuleTargetProxy::EqualTo>
         proxyCache;
 
-   protected:
     auto getFromCache(const Ref<const ModuleTarget> &target) const {
       const auto it = proxyCache.find(target.get());
-      return std::ref(it != proxyCache.end()
-                          ? *it
-                          : *proxyCache.emplace(target, compilerOptions).first);
+      return std::ref(
+          it != proxyCache.end()
+              ? *it
+              : *proxyCache.emplace(target, ctx, compilerOptions).first);
     }
 
    public:
     ModuleExport(const ModuleBuilder &builder, const Context &ctx)
-        : compilerOptions(builder.getCompilerOptions()),
+        : ctx(ctx),
+          compilerOptions(builder.getCompilerOption()),
           targetList(builder.onBuild(ctx, moduleMap)) {}
 
     std::optional<Ref<const ModuleTarget>> findModule(
@@ -66,15 +75,11 @@ export class ModuleBuilder : public ObjBuilder, public CachedExportFactory {
   };
 
  public:
-  using ObjBuilder::ObjBuilder;
-
   const std::string &getName() const override { return name; }
 
   std::shared_ptr<Export> onCreate(const Context &ctx) const override {
     updateEverything(ctx);
     return std::make_shared<ModuleExport>(*this, ctx);
   }
-
-  Path getOutput(const Context &) const override { return Path(); }
 };
 }  // namespace makeDotCpp

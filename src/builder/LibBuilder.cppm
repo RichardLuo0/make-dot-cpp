@@ -1,7 +1,7 @@
 export module makeDotCpp.builder:LibBuilder;
 import :Targets;
 import :BuilderContext;
-import :ObjBuilder;
+import :ModuleBuilder;
 import :Export;
 import :TargetProxy;
 import std;
@@ -42,11 +42,11 @@ export struct LibTarget : public CachedTarget<>, public Deps<> {
   }
 };
 
-export class LibBuilder : public ObjBuilder, public CachedExportFactory {
+export class LibBuilder : public ModuleBuilder {
  protected:
   CHAIN_VAR(bool, isShared, false, setShared);
 
-  TargetList onBuild(const Context &ctx, ModuleMap &map) const {
+  TargetList onBuild(const Context &ctx, ModuleMap &map) const override {
     TargetList list(std::in_place_type<LibTarget>, name, isShared);
     auto &target = list.getTarget<LibTarget>();
     target.dependOn(list.append(buildObjTargetList(ctx, map)));
@@ -60,49 +60,24 @@ export class LibBuilder : public ObjBuilder, public CachedExportFactory {
   }
 
  public:
-  using ObjBuilder::ObjBuilder;
+  using ModuleBuilder::ModuleBuilder;
 
   LibBuilder(const std::string &name, bool isShared = false)
-      : ObjBuilder(name), isShared(isShared) {}
+      : ModuleBuilder(name), isShared(isShared) {}
 
   Path getOutput(const Context &ctx) const override {
     return LibTarget::getOutput(ctx, name, isShared);
   }
 
  protected:
-  struct LibExport : public Export {
-    const Context ctx;
-    const CompilerOptions compilerOptions;
-    ModuleMap moduleMap;
-    const TargetList targetList;
-    const TargetProxy<> target;
-    mutable std::unordered_set<ModuleTargetProxy, ModuleTargetProxy::Hash,
-                               ModuleTargetProxy::EqualTo>
-        proxyCache;
-
+  struct LibExport : public ModuleExport {
    protected:
-    auto getFromCache(const Ref<const ModuleTarget> &target) const {
-      const auto it = proxyCache.find(target.get());
-      return std::ref(
-          it != proxyCache.end()
-              ? *it
-              : *proxyCache.emplace(target, ctx, compilerOptions).first);
-    }
+    const TargetProxy<> target;
 
    public:
     LibExport(const LibBuilder &builder, const Context &ctx)
-        : ctx(ctx),
-          compilerOptions(builder.getCompilerOptions()),
-          targetList(builder.onBuild(ctx, moduleMap)),
+        : ModuleExport(builder, ctx),
           target(targetList.getTarget(), this->ctx, compilerOptions) {}
-
-    std::optional<Ref<const ModuleTarget>> findModule(
-        const std::string &moduleName) const override {
-      const auto it = moduleMap.find(moduleName);
-      return it == moduleMap.end()
-                 ? std::nullopt
-                 : std::make_optional(getFromCache(it->second));
-    }
 
     std::optional<Ref<const Target>> getTarget() const override {
       return target;
@@ -110,8 +85,6 @@ export class LibBuilder : public ObjBuilder, public CachedExportFactory {
   };
 
  public:
-  const std::string &getName() const override { return name; }
-
   std::shared_ptr<Export> onCreate(const Context &ctx) const override {
     updateEverything(ctx);
     return std::make_shared<LibExport>(*this, ctx);

@@ -19,7 +19,7 @@ export DEF_EXCEPTION(FileNotFound, (const Path &file),
                      "file not found: " + file.generic_string());
 export DEF_EXCEPTION(CompileError, (), "compile error");
 
-export struct CompilerOptions {
+export struct CompilerOption {
   std::string compileOption;
   std::string linkOption;
 };
@@ -60,6 +60,7 @@ export struct VFSContext : public CtxWrapper {
     else {
       auto outputWriteTime = lastWriteTime(output);
       for (const auto &dep : deps) {
+        if (dep.empty()) continue;
         if (!exists(dep)) throw FileNotFound(dep.generic_string());
         if (lastWriteTime(dep) > outputWriteTime) return true;
       }
@@ -84,9 +85,9 @@ export struct BuilderContext : public VFSContext {
 
  public:
   const std::shared_ptr<const Compiler> &compiler;
-  const CompilerOptions compilerOptions;
+  const CompilerOption compilerOptions;
 
-  BuilderContext(CLRef<Context> ctx, const CompilerOptions &compilerOptions)
+  BuilderContext(CLRef<Context> ctx, const CompilerOption &compilerOptions)
       : VFSContext(ctx),
         compiler(ctx.compiler),
         compilerOptions(compilerOptions) {}
@@ -166,7 +167,7 @@ export struct BuilderContextChild : public BuilderContext {
 
  public:
   BuilderContextChild(LRef<BuilderContext> parent, CLRef<Context> ctx,
-                      const CompilerOptions &compilerOptions)
+                      const CompilerOption &compilerOptions)
       : BuilderContext(ctx, compilerOptions), parent(parent) {
     vfs.merge(parent.vfs);
     id = parent.id;

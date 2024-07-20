@@ -12,14 +12,14 @@ struct TargetProxy : public T {
   const T &target;
 
   const Context *ctx = nullptr;
-  const CompilerOptions &compilerOptions;
+  const CompilerOption &compilerOptions;
 
  public:
-  TargetProxy(CLRef<T> target, CLRef<CompilerOptions> compilerOptions)
+  TargetProxy(CLRef<T> target, CLRef<CompilerOption> compilerOptions)
       : target(target), compilerOptions(compilerOptions) {}
 
   TargetProxy(CLRef<T> target, CLRef<Context> ctx,
-              CLRef<CompilerOptions> compilerOptions)
+              CLRef<CompilerOption> compilerOptions)
       : target(target), ctx(&ctx), compilerOptions(compilerOptions) {}
 
   std::optional<Ref<Node>> build(BuilderContext &parent) const override {
