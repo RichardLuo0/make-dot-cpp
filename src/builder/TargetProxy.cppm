@@ -11,25 +11,24 @@ struct TargetProxy : public T {
  protected:
   const T &target;
 
-  const Context *ctx = nullptr;
+  const CtxWrapper *ctxW = nullptr;
   const CompilerOption &compilerOptions;
 
  public:
-  TargetProxy(CLRef<T> target, CLRef<CompilerOption> compilerOptions)
-      : target(target), compilerOptions(compilerOptions) {}
+  TargetProxy(const T *target, const CompilerOption *compilerOptions)
+      : target(*target), compilerOptions(*compilerOptions) {}
 
-  TargetProxy(CLRef<T> target, CLRef<Context> ctx,
-              CLRef<CompilerOption> compilerOptions)
-      : target(target), ctx(&ctx), compilerOptions(compilerOptions) {}
+  TargetProxy(const T *target, const CtxWrapper *ctxW,
+              const CompilerOption *compilerOptions)
+      : target(*target), ctxW(ctxW), compilerOptions(*compilerOptions) {}
 
   std::optional<Ref<Node>> build(BuilderContext &parent) const override {
-    BuilderContextChild child(parent, ctx != nullptr ? *ctx : parent.ctx,
-                              compilerOptions);
+    BuilderContext::Child child(&parent, &compilerOptions, ctxW);
     return target.build(child);
   }
 
   Path getOutput(const CtxWrapper &parent) const override {
-    return target.getOutput(ctx != nullptr ? CtxWrapper(*ctx) : parent);
+    return target.getOutput(ctxW != nullptr ? *ctxW : parent);
   }
 
   struct EqualTo {
@@ -61,7 +60,7 @@ export struct ModuleTargetProxy : public TargetProxy<ModuleTarget> {
   const std::string &getName() const override { return target.getName(); };
 
   ModuleMap getModuleMap(const CtxWrapper &parent) const override {
-    return target.getModuleMap(ctx != nullptr ? CtxWrapper(*ctx) : parent);
+    return target.getModuleMap(ctxW != nullptr ? *ctxW : parent);
   }
 };
 }  // namespace makeDotCpp

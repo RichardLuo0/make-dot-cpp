@@ -82,7 +82,7 @@ struct Deps {
     }
   }
 
-  void dependOn(CLRef<T> target) { targetDeps.emplace_back(target); }
+  void dependOn(Ref<const T> target) { targetDeps.emplace_back(target); }
 };
 
 export struct FilesDeps {

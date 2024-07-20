@@ -16,7 +16,8 @@ export class Glob : public FileProvider {
     std::unordered_set<Path> fileSet;
     auto fileList = glob::rglob(pattern);
     for (auto& file : fileList) {
-      fileSet.emplace(file);
+      // FIXME https://github.com/llvm/llvm-project/pull/99780
+      fileSet.emplace(file.make_preferred());
     }
     return fileSet;
   }

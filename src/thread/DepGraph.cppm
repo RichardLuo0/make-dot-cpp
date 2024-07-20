@@ -79,7 +79,7 @@ export class DepGraph {
         try {
           threadPool.post(std::move(task), newThreadHint);
           state = Running;
-        } catch (const ThreadPool::IsTerminated& e) {
+        } catch (const OperationAfterTerminated&) {
         }
       }
     }

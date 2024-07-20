@@ -56,7 +56,6 @@ export struct CustomUsage : public Usage {
     for (auto& path : devPackages) {
       builder.dependOn(buildPackage(path));
     }
-    fs::create_directories(ctx.output);
     auto result = builder.build(ctx);
     result.get();
     auto dll = std::make_shared<boost::dll::shared_library>(
@@ -161,12 +160,13 @@ export struct DefaultUsage : public Usage {
   std::unordered_set<PackagePath, PackagePath::Hash> packages;
 
   std::shared_ptr<const ExportFactory> getExportFactory(
-      const Context&, const std::string& name, const Path&,
+      const Context&, const std::string& name, const Path& projectPath,
       std::function<const ExFSet&(const Path&)>) const override {
     if (moduleFileGlob != std::nullopt) {
       auto createFactory =
           [&]<class B>() -> std::shared_ptr<const ExportFactory> {
         B builder(name);
+        builder.setBase(projectPath);
         builder.addSrc(Glob(moduleFileGlob.value()));
         return std::make_shared<ModuleExportFactory<B>>(
             name, std::move(builder), getCompileOption(), getLinkOption());

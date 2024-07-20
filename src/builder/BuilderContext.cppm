@@ -2,6 +2,7 @@ module;
 #include <boost/describe.hpp>
 
 export module makeDotCpp.builder:BuilderContext;
+import :Exceptions;
 import :common;
 import std;
 import makeDotCpp;
@@ -15,8 +16,6 @@ import makeDotCpp.utils;
 #include "macro.hpp"
 
 namespace makeDotCpp {
-export DEF_EXCEPTION(FileNotFound, (const Path &file),
-                     "file not found: " + file.generic_string());
 export DEF_EXCEPTION(CompileError, (), "compile error");
 
 export struct CompilerOption {
@@ -25,25 +24,26 @@ export struct CompilerOption {
 };
 
 export struct CtxWrapper {
- public:
+ protected:
   const Context &ctx;
+  const Path bOutput;
 
-  CtxWrapper(CLRef<Context> ctx) : ctx(ctx) {}
+ public:
+  CtxWrapper(const Context *ctx, const Path &bOutput)
+      : ctx(*ctx), bOutput(bOutput) {}
 
-  Path outputPath() const { return ctx.output; }
+  Path outputPath() const { return ctx.output / bOutput; }
 
-  Path modulePath() const { return ctx.modulePath(); }
+  Path modulePath() const { return ctx.output / bOutput / "module"; }
 
-  Path objPath() const { return ctx.objPath(); }
+  Path objPath() const { return ctx.output / bOutput / "obj"; }
 };
 
-export struct VFSContext : public CtxWrapper {
+export struct VFSContext {
  protected:
   std::unordered_set<Path> vfs;
 
  public:
-  using CtxWrapper::CtxWrapper;
-
   bool exists(Path path) const {
     return vfs.contains(path) ? true : fs::exists(path);
   }
@@ -71,9 +71,7 @@ export struct VFSContext : public CtxWrapper {
   void addFile(const Path &path) { vfs.emplace(path); }
 };
 
-export struct BuilderContext : public VFSContext {
-  friend struct BuilderContextChild;
-
+export struct BuilderContext : public CtxWrapper, public VFSContext {
  protected:
   int id = 1;
   FutureList futureList;
@@ -84,21 +82,21 @@ export struct BuilderContext : public VFSContext {
   }
 
  public:
-  const std::shared_ptr<const Compiler> &compiler;
-  const CompilerOption compilerOptions;
+  const CompilerOption &compilerOptions;
 
-  BuilderContext(CLRef<Context> ctx, const CompilerOption &compilerOptions)
-      : VFSContext(ctx),
-        compiler(ctx.compiler),
-        compilerOptions(compilerOptions) {}
+  BuilderContext(const Context *ctx, const Path &bOutput,
+                 const CompilerOption *compilerOptions)
+      : CtxWrapper(ctx, bOutput), compilerOptions(*compilerOptions) {}
+  BuilderContext(const CtxWrapper &ctxW, const CompilerOption *compilerOptions)
+      : CtxWrapper(ctxW), compilerOptions(*compilerOptions) {}
 
   FutureList &&takeFutureList() { return std::move(futureList); }
 
   std::string compileCommand(
       const Path &input, const std::unordered_map<std::string, Path> &moduleMap,
       const Path &output) const {
-    return compiler->compileCommand(input, output, ctx.debug, moduleMap,
-                                    compilerOptions.compileOption);
+    return ctx.compiler->compileCommand(input, output, ctx.debug, moduleMap,
+                                        compilerOptions.compileOption);
   }
 
 #define GENERATE_COMPILE_METHOD(NAME, INPUT, CAPTURE, LOGNAME, FUNC)        \
@@ -129,7 +127,7 @@ export struct BuilderContext : public VFSContext {
       compileModule,
       (const Path &input,
        const std::unordered_map<std::string, Path> &moduleMap),
-      (compiler = this->compiler, compilerOptions = this->compilerOptions),
+      (compiler = ctx.compiler, compilerOptions = compilerOptions),
       "Compiling module",
       compiler->compileModule(input, output, moduleMap,
                               compilerOptions.compileOption));
@@ -137,43 +135,46 @@ export struct BuilderContext : public VFSContext {
       compile,
       (const Path &input,
        const std::unordered_map<std::string, Path> &moduleMap),
-      (debug = this->ctx.debug, compiler = this->compiler,
-       compileOption = this->compilerOptions.compileOption),
+      (compiler = ctx.compiler, debug = ctx.debug,
+       compileOption = compilerOptions.compileOption),
       "Compiling obj",
       compiler->compile(input, output, debug, moduleMap, compileOption));
   GENERATE_COMPILE_METHOD(link, (ranges::range<Path> auto &&objList),
-                          (debug = this->ctx.debug, compiler = this->compiler,
+                          (compiler = ctx.compiler, debug = ctx.debug,
                            objList = objList | ranges::to<std::vector<Path>>(),
-                           linkOption = this->compilerOptions.linkOption),
+                           linkOption = compilerOptions.linkOption),
                           "Linking",
                           compiler->link(objList, output, debug, linkOption));
   GENERATE_COMPILE_METHOD(archive, (ranges::range<Path> auto &&objList),
-                          (compiler = this->compiler,
+                          (compiler = ctx.compiler,
                            objList = objList | ranges::to<std::vector<Path>>()),
                           "Archiving", compiler->archive(objList, output));
   GENERATE_COMPILE_METHOD(createSharedLib, (ranges::range<Path> auto &&objList),
-                          (compiler = this->compiler,
+                          (compiler = ctx.compiler,
                            objList = objList | ranges::to<std::vector<Path>>(),
-                           linkOption = this->compilerOptions.linkOption),
+                           linkOption = compilerOptions.linkOption),
                           "Archiving",
                           compiler->createSharedLib(objList, output,
                                                     linkOption));
 #undef GENERATE_COMPILE_METHOD
+
+  struct Child;
 };
 
-export struct BuilderContextChild : public BuilderContext {
+struct BuilderContext::Child : public BuilderContext {
  private:
   BuilderContext &parent;
 
  public:
-  BuilderContextChild(LRef<BuilderContext> parent, CLRef<Context> ctx,
-                      const CompilerOption &compilerOptions)
-      : BuilderContext(ctx, compilerOptions), parent(parent) {
-    vfs.merge(parent.vfs);
-    id = parent.id;
+  Child(BuilderContext *parent, const CompilerOption *compilerOptions,
+        const CtxWrapper *ctxW = nullptr)
+      : BuilderContext(ctxW != nullptr ? *ctxW : *parent, compilerOptions),
+        parent(*parent) {
+    vfs.merge(this->parent.vfs);
+    id = this->parent.id;
   }
 
-  ~BuilderContextChild() {
+  ~Child() {
     parent.vfs.merge(vfs);
     parent.id = id;
     std::move(futureList.begin(), futureList.end(),

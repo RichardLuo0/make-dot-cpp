@@ -2,6 +2,7 @@ module;
 #include <boost/describe.hpp>
 
 export module makeDotCpp.builder:Builder;
+import :Exceptions;
 import :BuilderContext;
 import :Targets;
 import :Export;
@@ -28,6 +29,10 @@ export struct Unit {
                        (input, exported, moduleName, includeDeps, moduleDeps),
                        (), ())
 };
+
+export DEF_EXCEPTION(SrcNotInBase, (const Path &src, const Path &base),
+                     src.generic_string() + " is not in " +
+                         base.generic_string());
 
 export class Builder {
  protected:
@@ -61,12 +66,19 @@ export class Builder {
   };
 
  protected:
-  std::string name = "builder";
+  const std::string name = "builder";
 
- protected:
   CHAIN_VAR_SET(Path, srcSet, addSrc, src) { srcSet.emplace(src); }
 
+ protected:
+  Path base = fs::current_path();
+
+ public:
   CHAIN_METHOD(addSrc, FileProvider, p) { srcSet.merge(p.list()); }
+  CHAIN_METHOD(setBase, Path, base) {
+    this->base = fs::absolute(base);
+    if (!fs::exists(this->base)) throw DirNotFound(this->base);
+  }
 
  protected:
   CHAIN_VAR_SET(std::shared_ptr<const ExportFactory>, exFactorySet, dependOn,
@@ -83,18 +95,18 @@ export class Builder {
   }
 
  protected:
-  const Path cache = "cache/" + name;
+  const Path cache = Path(name) / "cache";
 
  private:
-  CompilerOption compilerOptions;
+  CompilerOption compilerOption;
 
  protected:
 #define GENERATE_OPTIONS_JSON_METHOD(NAME, OPTIONS)        \
   void update##NAME(const Context &ctx) const {            \
     const Path path = get##NAME(ctx);                      \
-    const auto &content = compilerOptions.OPTIONS;         \
+    const auto &content = compilerOption.OPTIONS;          \
     if (!fs::exists(path) || readAsStr(path) != content) { \
-      fs::create_directories(path.parent_path());          \
+      fs::create_directory(path.parent_path());            \
       std::ofstream os(path);                              \
       os.exceptions(std::ifstream::failbit);               \
       os << content;                                       \
@@ -110,14 +122,16 @@ export class Builder {
 #undef GENERATE_OPTIONS_JSON_METHOD
 
   CHAIN_METHOD(define, std::string, d) {
-    compilerOptions.compileOption += " -D " + d;
+    compilerOption.compileOption += " -D " + d;
   }
   CHAIN_METHOD(include, Path, path) {
-    compilerOptions.compileOption += " -I " + path.generic_string();
+    compilerOption.compileOption += " -I " + path.generic_string();
   }
 
  public:
-  Builder(const std::string &name) : name(name) {}
+  Builder(const std::string &name) : name(name) {
+    // TODO validate the name
+  }
   virtual ~Builder() = default;
 
   CHAIN_METHOD(dependOn,
@@ -127,25 +141,27 @@ export class Builder {
   }
 
  protected:
-  // A pair consists of a set of input src file and a common base
-  using InputInfo = std::pair<std::unordered_set<Path>, Path>;
-
-  InputInfo buildInputInfo() const {
+  std::unordered_set<Path> buildInputSet() const {
     std::unordered_set<Path> inputSet;
     for (const auto &src : srcSet) {
-      inputSet.emplace(fs::canonical(src));
+      const auto srcPath = fs::absolute(src);
+      if (!fs::exists(srcPath)) throw FileNotFound(srcPath);
+      const auto [baseEnd, _] =
+          std::mismatch(base.begin(), base.end(), srcPath.begin());
+      if (baseEnd != base.end()) throw SrcNotInBase(srcPath, base);
+      inputSet.emplace(srcPath);
     }
-    return std::make_pair(std::move(inputSet), commonBase(inputSet));
+    return inputSet;
   }
 
-  auto buildUnitList(const Context &ctx, const InputInfo &inputInfo) const {
-    const auto &[inputSet, base] = inputInfo;
+  auto buildUnitList(const Context &ctx,
+                     const std::unordered_set<Path> &inputSet) const {
     std::vector<Unit> unitList;
     unitList.reserve(inputSet.size());
     const auto cachePath = ctx.output / cache / "units";
     for (auto &input : inputSet) {
       const auto depJsonPath =
-          cachePath / (fs::proximate(input, base) += ".json");
+          cachePath / (input.lexically_proximate(base) += ".json");
       const auto compileOptionsJson = getCompileOptionsJson(ctx);
       if (fs::exists(depJsonPath) &&
           fs::last_write_time(depJsonPath) > fs::last_write_time(input) &&
@@ -153,7 +169,10 @@ export class Builder {
               fs::last_write_time(compileOptionsJson)) {
         std::ifstream is(depJsonPath);
         const auto depJson = parseJson(depJsonPath);
-        unitList.emplace_back(json::value_to<Unit>(depJson));
+        unitList
+            .emplace_back(json::value_to<Unit>(depJson))
+            // FIXME https://github.com/llvm/llvm-project/pull/99780
+            .input.make_preferred();
       } else {
         const auto compileOption = getCompilerOption().compileOption;
         const auto info = ctx.compiler->getModuleInfo(input, compileOption);
@@ -170,8 +189,7 @@ export class Builder {
   }
 
   auto buildUnitList(const Context &ctx) const {
-    const auto inputInfo = buildInputInfo();
-    return buildUnitList(ctx, inputInfo);
+    return buildUnitList(ctx, buildInputSet());
   }
 
 #define GENERATE_UPDATE_GET(TYPE, NAME, FUNC_NAME)    \
@@ -197,12 +215,13 @@ export class Builder {
       co.compileOption += ' ' + ex->getCompileOption();
       co.linkOption += ' ' + ex->getLinkOption();
     }
-    co.compileOption += ' ' + compilerOptions.compileOption;
-    co.linkOption += ' ' + compilerOptions.linkOption;
+    co.compileOption += ' ' + compilerOption.compileOption;
+    co.linkOption += ' ' + compilerOption.linkOption;
   }
 #undef GENERATE_UPDATE_GET
 
   void updateEverything(const Context &ctx) const {
+    fs::create_directories(ctx.output / name);
     updateExportSet(ctx);
     // exSet is prepared here
     updateExportTargetList();
@@ -219,7 +238,7 @@ export class Builder {
     updateEverything(ctx);
     const auto targetList = onBuild(ctx);
     const auto &target = targetList.getTarget();
-    BuilderContext builderCtx{ctx, getCompilerOption()};
+    BuilderContext builderCtx{&ctx, name, &getCompilerOption()};
     target.build(builderCtx);
     ctx.run();
     return builderCtx.takeFutureList();

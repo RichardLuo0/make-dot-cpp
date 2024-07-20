@@ -43,7 +43,7 @@ class BuildFileProject {
                    const std::shared_ptr<Compiler>& compiler)
       : projectDesc(ProjectDesc::create(projectJsonPath, packagesPath)),
         ctx{.name = projectDesc.name + "_build",
-            .output = fs::weakly_canonical(".build"),
+            .output = fs::absolute(".build"),
             .compiler = compiler},
         packagesPath(packagesPath),
         builder(projectDesc.name + "_build") {
@@ -80,10 +80,7 @@ class BuildFileProject {
 
   const auto& getContext() const { return ctx; }
 
-  auto build() {
-    fs::create_directories(ctx.output);
-    return builder.build(ctx);
-  }
+  auto build() { return builder.build(ctx); }
 
   auto getOutput() const { return builder.getOutput(ctx); }
 

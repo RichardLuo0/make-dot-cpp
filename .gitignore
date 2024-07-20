@@ -6,3 +6,4 @@ build-*/
 .clangd
 interface/
 compile_commands.json
+CMakeLists.txt

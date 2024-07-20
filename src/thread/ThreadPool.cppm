@@ -5,11 +5,11 @@ import std;
 #include "macro.hpp"
 
 namespace makeDotCpp {
+export DEF_EXCEPTION(OperationAfterTerminated, (const std::string& op),
+                     op + " after thread pool is terminated");
+
 export class ThreadPool {
  public:
-  DEF_EXCEPTION(IsTerminated, (const std::string& when),
-                "thread pool is terminating when " + when);
-
   using RetType = std::any;
   using Func = RetType(ThreadPool&);
   using Task = std::packaged_task<Func>;
@@ -40,7 +40,7 @@ export class ThreadPool {
 
   void post(Task&& task, bool newThreadHint = true) {
     std::lock_guard lock(mutex);
-    if (isTerminated) throw IsTerminated("posting new task");
+    if (isTerminated) throw OperationAfterTerminated("posting new task");
     taskQueue.push(std::move(task));
     if (threadList.size() < threadNum && freeThread < 1 &&
         (newThreadHint || threadList.size() == 0)) {

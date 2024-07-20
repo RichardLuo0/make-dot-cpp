@@ -21,13 +21,14 @@ export struct LibTarget : public CachedTarget<>, public Deps<> {
   LibTarget(const std::string &name, bool isShared = false)
       : name(name), isShared(isShared) {}
 
-  static Path getOutput(const Context &ctx, const std::string &name,
+  static Path getOutput(const CtxWrapper &ctx, const std::string &name,
                         bool isShared) {
-    return ctx.output / ("lib" + name + (isShared ? SHLIB_POSTFIX : ".a"));
+    return ctx.outputPath() /
+           ("lib" + name + (isShared ? SHLIB_POSTFIX : ".a"));
   }
 
   Path getOutput(const CtxWrapper &ctx) const override {
-    return LibTarget::getOutput(ctx.ctx, name, isShared);
+    return getOutput(ctx, name, isShared);
   }
 
   std::optional<Ref<Node>> onBuild(BuilderContext &ctx,
@@ -66,7 +67,7 @@ export class LibBuilder : public ModuleBuilder {
       : ModuleBuilder(name), isShared(isShared) {}
 
   Path getOutput(const Context &ctx) const override {
-    return LibTarget::getOutput(ctx, name, isShared);
+    return LibTarget::getOutput(CtxWrapper(&ctx, name), name, isShared);
   }
 
  protected:
@@ -75,9 +76,10 @@ export class LibBuilder : public ModuleBuilder {
     const TargetProxy<> target;
 
    public:
-    LibExport(const LibBuilder &builder, const Context &ctx)
-        : ModuleExport(builder, ctx),
-          target(targetList.getTarget(), this->ctx, compilerOptions) {}
+    LibExport(const LibBuilder &builder, const Context &ctx,
+              const Path &bOutput)
+        : ModuleExport(builder, ctx, bOutput),
+          target(&targetList.getTarget(), &ctxW, &compilerOptions) {}
 
     std::optional<Ref<const Target>> getTarget() const override {
       return target;
@@ -87,7 +89,7 @@ export class LibBuilder : public ModuleBuilder {
  public:
   std::shared_ptr<Export> onCreate(const Context &ctx) const override {
     updateEverything(ctx);
-    return std::make_shared<LibExport>(*this, ctx);
+    return std::make_shared<LibExport>(*this, ctx, name);
   }
 };
 }  // namespace makeDotCpp

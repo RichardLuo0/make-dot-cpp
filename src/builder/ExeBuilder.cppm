@@ -20,12 +20,12 @@ export struct ExeTarget : public CachedTarget<>,
  public:
   ExeTarget(const std::string &name) : name(name) {}
 
-  static Path getOutput(const Context &ctx, const Path &name) {
-    return ctx.output / name += EXE_POSTFIX;
+  static Path getOutput(const CtxWrapper &ctx, const Path &name) {
+    return ctx.outputPath() / name += EXE_POSTFIX;
   }
 
   Path getOutput(const CtxWrapper &ctx) const override {
-    return ExeTarget::getOutput(ctx.ctx, name);
+    return getOutput(ctx, name);
   }
 
   std::optional<Ref<Node>> onBuild(BuilderContext &ctx,
@@ -47,7 +47,7 @@ export class ExeBuilder : public ObjBuilder {
   using ObjBuilder::ObjBuilder;
 
   Path getOutput(const Context &ctx) const override {
-    return ExeTarget::getOutput(ctx, name);
+    return ExeTarget::getOutput(CtxWrapper(&ctx, name), name);
   }
 
  protected:

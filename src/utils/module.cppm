@@ -11,11 +11,6 @@ import boost.json;
 #include "macro.hpp"
 
 namespace makeDotCpp {
-export template <typename T>
-using LRef = std::add_lvalue_reference_t<T>;
-export template <typename T>
-using CLRef = std::add_lvalue_reference_t<std::add_const_t<T>>;
-
 namespace ranges {
 export template <std::ranges::range C, std::size_t N>
 class concatView : public std::ranges::view_interface<concatView<C, N>> {
@@ -137,8 +132,8 @@ struct Merge : public T {};
 export template <class T>
 struct Required : public T {};
 
-DEF_EXCEPTION(RequiredJsonMember, (const std::string& name),
-              "required json member: " + name);
+export DEF_EXCEPTION(RequiredJsonMember, (const std::string& name),
+                     "required json member: " + name);
 
 template <class T>
 struct isRequired : std::false_type {};

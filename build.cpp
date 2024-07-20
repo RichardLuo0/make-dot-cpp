@@ -20,11 +20,12 @@ extern "C" int build(const ProjectContext &ctx) {
 
   auto libBuilder = std::make_shared<LibBuilder>("makeDotCpp");
   libBuilder->setShared(true)
+      .setBase("src")
       .addSrc(Glob("src/**/*.cppm"))
       .include("src/utils");
 
   auto builder = std::make_shared<ExeBuilder>("make.cpp");
-  builder->addSrc("src/main.cpp").include("src/utils");
+  builder->setBase("src").addSrc("src/main.cpp").include("src/utils");
 
   for (auto &package : ctx.packageExports | std::views::values) {
     libBuilder->dependOn(package);
@@ -55,7 +56,8 @@ extern "C" int build(const ProjectContext &ctx) {
         {
           const Path libPath = ctx.install / "lib";
           Project::ensureDirExists(libPath);
-          Project::updateAllFiles(ctx.modulePath(), libPath);
+          Project::updateAllFiles(ctx.output / "makeDotCpp" / "module",
+                                  libPath);
         }
 
         { Project::updateFile("project.json", ctx.install); }

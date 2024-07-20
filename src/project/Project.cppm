@@ -74,24 +74,15 @@ export class Project {
       },
       setInstall);
 
-  CHAIN_METHOD(to, Path, path) { ctx.output = fs::weakly_canonical(path); }
-  CHAIN_METHOD(installTo, Path, path) {
-    ctx.install = fs::weakly_canonical(path);
-  }
+  CHAIN_METHOD(to, Path, path) { ctx.output = fs::absolute(path); }
+  CHAIN_METHOD(installTo, Path, path) { ctx.install = fs::absolute(path); }
   CHAIN_METHOD(setDebug, bool, debug) { ctx.debug = debug; }
   CHAIN_METHOD(setThreadPoolSize, std::size_t, size) {
     ctx.threadPool.setSize(size);
   }
-  CHAIN_METHOD(setRelativeModulePath, std::string, path) {
-    ctx.relativeModulePath = path;
-  }
-  CHAIN_METHOD(setRelativeObjPath, std::string, path) {
-    ctx.relativeObjPath = path;
-  }
   CHAIN_METHOD(setCompiler, std::shared_ptr<const Compiler>, compiler) {
     ctx.compiler = compiler;
   }
-
   CHAIN_METHOD(setVerbose, bool, verbose) { ctx.verbose = verbose; }
 
  public:

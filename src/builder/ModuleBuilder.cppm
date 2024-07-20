@@ -44,6 +44,7 @@ export class ModuleBuilder : public ObjBuilder, public CachedExportFactory {
   struct ModuleExport : public Export {
    protected:
     const Context ctx;
+    const CtxWrapper ctxW;
     const CompilerOption compilerOptions;
     ModuleMap moduleMap;
     const TargetList targetList;
@@ -56,12 +57,15 @@ export class ModuleBuilder : public ObjBuilder, public CachedExportFactory {
       return std::ref(
           it != proxyCache.end()
               ? *it
-              : *proxyCache.emplace(target, ctx, compilerOptions).first);
+              : *proxyCache.emplace(&target.get(), &ctxW, &compilerOptions)
+                     .first);
     }
 
    public:
-    ModuleExport(const ModuleBuilder &builder, const Context &ctx)
+    ModuleExport(const ModuleBuilder &builder, const Context &ctx,
+                 const Path &bOutput)
         : ctx(ctx),
+          ctxW(&this->ctx, bOutput),
           compilerOptions(builder.getCompilerOption()),
           targetList(builder.onBuild(ctx, moduleMap)) {}
 
@@ -79,7 +83,7 @@ export class ModuleBuilder : public ObjBuilder, public CachedExportFactory {
 
   std::shared_ptr<Export> onCreate(const Context &ctx) const override {
     updateEverything(ctx);
-    return std::make_shared<ModuleExport>(*this, ctx);
+    return std::make_shared<ModuleExport>(*this, ctx, name);
   }
 };
 }  // namespace makeDotCpp

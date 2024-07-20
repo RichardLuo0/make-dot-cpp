@@ -1,9 +1,10 @@
 export module makeDotCpp.builder;
+export import :Exceptions;
 export import :BuilderContext;
 export import :Targets;
 export import :Export;
 export import :Builder;
 export import :ObjBuilder;
 export import :ExeBuilder;
-export import :LibBuilder;
 export import :ModuleBuilder;
+export import :LibBuilder;

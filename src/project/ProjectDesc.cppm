@@ -14,8 +14,8 @@ import boost.json;
 #include "macro.hpp"
 
 namespace makeDotCpp {
-DEF_EXCEPTION(UsageNotDefined, (const std::string& name),
-              "no usage is defined in package: " + name);
+export DEF_EXCEPTION(UsageNotDefined, (const std::string& name),
+                     "no usage is defined in package: " + name);
 
 export struct ProjectDesc {
  public:
