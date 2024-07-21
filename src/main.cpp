@@ -40,19 +40,21 @@ class BuildFileProject {
       globalPackageCache;
 
  public:
-  BuildFileProject(const Path& projectJsonPath, const Path& packagesPath,
-                   const std::shared_ptr<Compiler>& compiler)
+  BuildFileProject(const Path& projectJsonPath, const Path& packagesPath)
       : projectDesc(ProjectDesc::create(projectJsonPath, packagesPath)),
         ctx{.name = projectDesc.name + "_build",
             .output = fs::absolute(".build"),
-            .compiler = compiler},
+            .debug = projectDesc.dev.debug},
         packagesPath(packagesPath),
         builder(projectDesc.name + "_build") {
-    compiler->addOption("-march=native -std=c++20 -Wall");
+    {
+      auto compiler = std::make_shared<Clang>();
+      compiler->addOption("-march=native -std=c++20 -Wall");
 #ifdef _WIN32
-    compiler->addOption("-D _WIN32");
+      compiler->addOption("-D _WIN32");
 #endif
-    ctx.debug = projectDesc.dev.debug;
+      ctx.compiler = compiler;
+    }
 
     builder.setShared(true);
     std::visit(
@@ -210,10 +212,8 @@ int main(int argc, const char** argv) {
   try {
     if (projectJsonPath.empty()) throw ProjectJsonNotFound();
     const Path packagesPath = getPackagesPath(vm);
-    const auto& vv = vm["compiler"];
-    const auto compiler =
-        getCompiler(vv.empty() ? "clang" : vv.as<std::string>(), packagesPath);
-    BuildFileProject project(projectJsonPath, packagesPath, compiler);
+
+    BuildFileProject project(projectJsonPath, packagesPath);
     auto future = project.build();
     future.get();
     const auto output = project.getOutput();
@@ -223,6 +223,11 @@ int main(int argc, const char** argv) {
 
     boost::dll::shared_library lib(output.generic_string());
     auto build = lib.get<api::Build>("build");
+
+    const auto& vv = vm["compiler"];
+    const auto compiler =
+        getCompiler(vv.empty() ? "clang" : vv.as<std::string>(), packagesPath);
+
     int ret = build(
         {project.getName(), project.getPackageExports(), compiler, argc, argv});
     if (vm.contains("compile-commands"))
