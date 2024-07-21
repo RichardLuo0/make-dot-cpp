@@ -67,7 +67,7 @@ export struct ProjectDesc {
  public:
   std::shared_ptr<const ExportFactory> getExportFactory(
       const Context& ctx, bool isGlobal, const Path& projectPath,
-      std::function<const ExFSet&(const Path&)> buildPackage) const {
+      const BuildPackage& buildPackage) const {
     if (usage == nullptr) throw UsageNotDefined(name);
     auto exf = usage->getExportFactory(ctx, name, projectPath, buildPackage);
     return isGlobal ? std::make_shared<GlobalExportFactory>(exf->getName(),

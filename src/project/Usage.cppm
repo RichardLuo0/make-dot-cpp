@@ -15,7 +15,8 @@ import boost.dll;
 #include "alias.hpp"
 
 namespace makeDotCpp {
-export using ExFSet = std::unordered_set<std::shared_ptr<const ExportFactory>>;
+export using BuildPackage =
+    std::function<std::shared_ptr<const ExportFactory>(const Path&)>;
 
 export struct Usage {
  public:
@@ -23,7 +24,7 @@ export struct Usage {
 
   virtual std::shared_ptr<const ExportFactory> getExportFactory(
       const Context& ctx, const std::string& name, const Path& projectPath,
-      std::function<const ExFSet&(const Path&)> buildPackage) const = 0;
+      const BuildPackage& buildPackage) const = 0;
 
   virtual const std::unordered_set<PackagePath, PackagePath::Hash>&
   getPackages() const = 0;
@@ -37,8 +38,8 @@ export struct CustomUsage : public Usage {
 
   std::shared_ptr<const ExportFactory> getExportFactory(
       const Context& ctx, const std::string& name, const Path& projectPath,
-      std::function<const ExFSet&(const Path&)> buildPackage) const override {
-    LibBuilder builder(name);
+      const BuildPackage& buildPackage) const override {
+    LibBuilder builder(name + "_export");
     builder.setShared(true)
         .define("NO_MAIN")
         .define("PROJECT_NAME=" + name)
@@ -153,7 +154,10 @@ export struct DefaultUsage : public Usage {
 
  public:
   std::optional<ProjectFmtStr> moduleFileGlob;
+  std::vector<ProjectFmtPath> moduleIncludePath;
   bool needsCompile = false;
+  std::unordered_set<PackagePath, PackagePath::Hash> devPackages;
+
   ProjectFmtStr compileOption;
   ProjectFmtStr linkOption;
   std::vector<std::string> libs;
@@ -161,13 +165,19 @@ export struct DefaultUsage : public Usage {
 
   std::shared_ptr<const ExportFactory> getExportFactory(
       const Context&, const std::string& name, const Path& projectPath,
-      std::function<const ExFSet&(const Path&)>) const override {
+      const BuildPackage& buildPackage) const override {
     if (moduleFileGlob != std::nullopt) {
       auto createFactory =
           [&]<class B>() -> std::shared_ptr<const ExportFactory> {
         B builder(name);
         builder.setBase(projectPath);
         builder.addSrc(Glob(moduleFileGlob.value()));
+        for (auto& path : moduleIncludePath) {
+          builder.include(path);
+        }
+        for (auto& path : devPackages) {
+          builder.dependOn(buildPackage(path));
+        }
         return std::make_shared<ModuleExportFactory<B>>(
             name, std::move(builder), getCompileOption(), getLinkOption());
       };
@@ -197,8 +207,8 @@ export struct DefaultUsage : public Usage {
 
  private:
   BOOST_DESCRIBE_CLASS(DefaultUsage, (),
-                       (moduleFileGlob, needsCompile, compileOption, linkOption,
-                        libs, packages),
+                       (moduleFileGlob, moduleIncludePath, needsCompile,
+                        compileOption, linkOption, libs, devPackages, packages),
                        (), ())
 };
 }  // namespace makeDotCpp

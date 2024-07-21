@@ -36,7 +36,8 @@ class BuildFileProject {
 
   std::unordered_map<Path, const ProjectDesc> projectDescCache;
   std::unordered_set<Path> localPackageCache;
-  std::unordered_map<Path, const ExFSet> globalPackageCache;
+  std::unordered_map<Path, const std::shared_ptr<const ExportFactory>>
+      globalPackageCache;
 
  public:
   BuildFileProject(const Path& projectJsonPath, const Path& packagesPath,
@@ -111,32 +112,22 @@ class BuildFileProject {
                            projectJsonPath, false));
   }
 
-  const ExFSet& buildGlobalPackage(const Path& path) {
-    std::unordered_set<Path> visited;
-    std::function<const ExFSet&(const Path& path)> buildGlobalPackageR =
-        [&](const Path& path) -> const ExFSet& {
-      const auto projectJsonPath =
-          fs::canonical(fs::is_directory(path) ? path / "project.json" : path);
-      auto it = globalPackageCache.find(projectJsonPath);
-      if (it != globalPackageCache.end()) return it->second;
+  std::shared_ptr<const ExportFactory> buildGlobalPackage(const Path& path) {
+    const auto projectJsonPath =
+        fs::canonical(fs::is_directory(path) ? path / "project.json" : path);
+    auto it = globalPackageCache.find(projectJsonPath);
+    if (it != globalPackageCache.end()) return it->second;
 
-      if (visited.contains(projectJsonPath))
-        throw CyclicPackageDependency(visited);
-      visited.emplace(projectJsonPath);
+    const auto& projectDesc = getProjectDesc(projectJsonPath);
+    const auto package =
+        buildPackage(projectDesc, projectJsonPath.parent_path() / ".build",
+                     projectJsonPath, true);
+    for (auto& path : projectDesc.getUsagePackages()) {
+      builder.dependOn(buildGlobalPackage(path));
+    }
 
-      const auto& projectDesc = getProjectDesc(projectJsonPath);
-      ExFSet exSet{buildPackage(projectDesc,
-                                projectJsonPath.parent_path() / ".build",
-                                projectJsonPath, true)};
-      for (auto& path : projectDesc.getUsagePackages()) {
-        auto& packages = buildGlobalPackageR(path);
-        exSet.insert(packages.begin(), packages.end());
-      }
-      visited.erase(projectJsonPath);
-      return globalPackageCache.emplace(projectJsonPath, std::move(exSet))
-          .first->second;
-    };
-    return buildGlobalPackageR(path);
+    return globalPackageCache.emplace(projectJsonPath, std::move(package))
+        .first->second;
   }
 
   std::shared_ptr<const ExportFactory> buildPackage(
