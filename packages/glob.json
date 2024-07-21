@@ -1,8 +1,0 @@
-{
-  "name": "glob",
-  "usage": {
-    "moduleFileGlob": "{0}/glob.cppm",
-    "compileOption": "-I {0}/glob/include",
-    "linkOption": "{0}/../build-cmake/packages/glob/libglob.a"
-  }
-}

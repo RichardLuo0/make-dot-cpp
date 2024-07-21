@@ -172,12 +172,8 @@ export struct DefaultUsage : public Usage {
         B builder(name);
         builder.setBase(projectPath);
         builder.addSrc(Glob(moduleFileGlob.value()));
-        for (auto& path : moduleIncludePath) {
-          builder.include(path);
-        }
-        for (auto& path : devPackages) {
-          builder.dependOn(buildPackage(path));
-        }
+        for (auto& path : moduleIncludePath) builder.include(path);
+        for (auto& path : devPackages) builder.dependOn(buildPackage(path));
         return std::make_shared<ModuleExportFactory<B>>(
             name, std::move(builder), getCompileOption(), getLinkOption());
       };
@@ -211,14 +207,35 @@ export struct DefaultUsage : public Usage {
                         compileOption, linkOption, libs, devPackages, packages),
                        (), ())
 };
-}  // namespace makeDotCpp
 
-namespace boost {
-namespace json {
-using namespace makeDotCpp;
-template <>
-struct is_described_class<CustomUsage> : std::true_type {};
-template <>
-struct is_described_class<DefaultUsage> : std::true_type {};
-}  // namespace json
-}  // namespace boost
+export struct LibUsage : public Usage {
+ public:
+  bool shared = false;
+  std::vector<ProjectFmtStr> srcFileGlob;
+  std::vector<ProjectFmtPath> includePath;
+  std::unordered_set<PackagePath, PackagePath::Hash> devPackages;
+  std::unordered_set<PackagePath, PackagePath::Hash> packages;
+
+  std::shared_ptr<const ExportFactory> getExportFactory(
+      const Context&, const std::string& name, const Path& projectPath,
+      const BuildPackage& buildPackage) const override {
+    auto builder = std::make_shared<LibBuilder>(name, shared);
+    builder->setBase(projectPath);
+    for (auto& glob : srcFileGlob) builder->addSrc(Glob(glob));
+    for (auto& path : includePath) builder->include(path);
+    for (auto& path : devPackages) builder->dependOn(buildPackage(path));
+    return builder;
+  }
+
+  const std::unordered_set<PackagePath, PackagePath::Hash>& getPackages()
+      const override {
+    return packages;
+  }
+
+ private:
+  BOOST_DESCRIBE_CLASS(LibUsage, (),
+                       (shared, srcFileGlob, includePath, devPackages,
+                        packages),
+                       (), ())
+};
+}  // namespace makeDotCpp

@@ -4,7 +4,7 @@
     "std",
     "boost",
     {
-      "path": "packages/glob.json"
+      "path": "packages/glob/project.json"
     }
   ],
   "dev": {

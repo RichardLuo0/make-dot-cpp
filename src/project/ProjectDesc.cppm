@@ -86,17 +86,9 @@ export std::shared_ptr<Usage> tag_invoke(
   const auto type = typePtr ? (*typePtr).as_string() : "";
   if (type == "custom")
     return json::value_to<std::shared_ptr<Merge<CustomUsage>>>(jv, ctx);
+  else if (type == "library")
+    return json::value_to<std::shared_ptr<Merge<LibUsage>>>(jv, ctx);
   else
     return json::value_to<std::shared_ptr<Merge<DefaultUsage>>>(jv, ctx);
 }
 }  // namespace makeDotCpp
-
-namespace boost {
-namespace json {
-using namespace makeDotCpp;
-template <>
-struct is_described_class<ProjectDesc> : std::true_type {};
-template <>
-struct is_described_class<ProjectDesc::Dev> : std::true_type {};
-}  // namespace json
-}  // namespace boost
