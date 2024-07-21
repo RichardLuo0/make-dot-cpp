@@ -13,7 +13,7 @@ using namespace makeDotCpp;
 using namespace api;
 
 extern "C" int build(const ProjectContext &ctx) {
-  ctx.compiler->addOption("-march=native -O3 -std=c++20 -Wall -Wextra")
+  ctx.compiler->addOption("-O3 -std=c++20 -Wall -Wextra")
       .addOption("-Wno-missing-field-initializers")
       // https://github.com/llvm/llvm-project/issues/75057;
       .addOption("-Wno-deprecated-declarations");
@@ -52,13 +52,6 @@ extern "C" int build(const ProjectContext &ctx) {
           Project::ensureDirExists(binPath);
           Project::updateFile(builder->getOutput(ctx), binPath);
           Project::updateFile(libBuilder->getOutput(ctx), binPath);
-        }
-
-        {
-          const Path libPath = ctx.install / "lib";
-          Project::ensureDirExists(libPath);
-          Project::updateAllFiles(ctx.output / "makeDotCpp" / "module",
-                                  libPath);
         }
 
         { Project::updateFile("project.json", ctx.install); }
