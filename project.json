@@ -15,9 +15,12 @@
     ]
   },
   "usage": {
-    "compileOption": "-fprebuilt-module-path={0}/lib",
+    "moduleFileGlob": "{0}/share/**/*.cppm",
+    "moduleIncludePath": [
+      "{0}/share/utils"
+    ],
     "linkOption": "{0}/bin/libmakeDotCpp.dll",
-    "packages": [
+    "devPackages": [
       "std",
       "boost"
     ]
