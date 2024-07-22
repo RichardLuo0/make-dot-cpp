@@ -1,0 +1,13 @@
+{
+  "name": "glob",
+  "usage": {
+    "type": "library",
+    "srcFileGlob": [
+      "{0}/glob.cppm",
+      "{0}/glob/source/glob.cpp"
+    ],
+    "includePath": [
+      "{0}/glob/include"
+    ]
+  }
+}
