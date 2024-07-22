@@ -9,11 +9,11 @@ struct Compiler;
 
 namespace api {
 export using Packages =
-    std::unordered_map<std::string, std::shared_ptr<const ExportFactory>>;
+    std::unordered_set<std::shared_ptr<const ExportFactory>>;
 
 export struct ProjectContext {
   const std::string name;
-  const Packages &packageExports;
+  const Packages &packages;
   const std::shared_ptr<Compiler> compiler;
   int argc;
   const char **argv;

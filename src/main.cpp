@@ -32,7 +32,7 @@ class BuildFileProject {
   Context ctx;
   const Path packagesPath;
   LibBuilder builder;
-  api::Packages packageExports;
+  api::Packages packages;
 
   std::unordered_map<Path, const ProjectDesc> projectDescCache;
   std::unordered_set<Path> localPackageCache;
@@ -87,7 +87,7 @@ class BuildFileProject {
 
   auto getOutput() const { return builder.getOutput(ctx); }
 
-  const auto& getPackageExports() const { return packageExports; }
+  const auto& getPackages() const { return packages; }
 
  protected:
   const ProjectDesc& getProjectDesc(const Path& projectJsonPath) {
@@ -109,9 +109,8 @@ class BuildFileProject {
       buildLocalPackage(path);
     }
     const std::string& name = projectDesc.name;
-    packageExports.emplace(
-        name, buildPackage(projectDesc, ctx.output / "packages" / name,
-                           projectJsonPath, false));
+    packages.emplace(buildPackage(projectDesc, ctx.output / "packages" / name,
+                                  projectJsonPath, false));
   }
 
   std::shared_ptr<const ExportFactory> buildGlobalPackage(const Path& path) {
@@ -228,8 +227,8 @@ int main(int argc, const char** argv) {
     const auto compiler =
         getCompiler(vv.empty() ? "clang" : vv.as<std::string>(), packagesPath);
 
-    int ret = build(
-        {project.getName(), project.getPackageExports(), compiler, argc, argv});
+    int ret =
+        build({project.getName(), project.getPackages(), compiler, argc, argv});
     if (vm.contains("compile-commands"))
       generateCompileCommands(project.getContext(), api::compileCommands);
     return ret;

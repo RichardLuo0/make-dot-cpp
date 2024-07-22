@@ -28,7 +28,7 @@ extern "C" int build(const ProjectContext &ctx) {
   auto builder = std::make_shared<ExeBuilder>("make.cpp");
   builder->setBase("src").addSrc("src/main.cpp").include("src/utils");
 
-  for (auto &package : ctx.packageExports | std::views::values) {
+  for (auto &package : ctx.packages) {
     libBuilder->dependOn(package);
     builder->dependOn(package);
   }
@@ -43,7 +43,7 @@ extern "C" int build(const ProjectContext &ctx) {
       })
       .setInstall([&](const Context &ctx) {
         if (ctx.install.empty()) {
-          std::cerr << "Install path is not set" << std::endl;
+          logger::error() << "Install path is not set" << std::endl;
           return;
         }
 
