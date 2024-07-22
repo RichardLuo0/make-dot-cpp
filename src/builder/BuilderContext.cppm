@@ -39,16 +39,16 @@ export struct CtxWrapper {
   Path objPath() const { return ctx.output / bOutput / "obj"; }
 };
 
-export struct VFSContext {
+export struct VFS {
  protected:
   std::unordered_set<Path> vfs;
 
  public:
-  bool exists(Path path) const {
+  bool exists(const Path &path) const {
     return vfs.contains(path) ? true : fs::exists(path);
   }
 
-  auto lastWriteTime(Path path) const {
+  auto lastWriteTime(const Path &path) const {
     return vfs.contains(path) ? fs::file_time_type::max()
                               : fs::last_write_time(path);
   }
@@ -71,8 +71,10 @@ export struct VFSContext {
   void addFile(const Path &path) { vfs.emplace(path); }
 };
 
-export struct BuilderContext : public CtxWrapper, public VFSContext {
+export struct BuilderContext : public CtxWrapper {
  protected:
+  inline static VFS vfs;
+
   int id = 1;
   FutureList futureList;
 
@@ -99,12 +101,24 @@ export struct BuilderContext : public CtxWrapper, public VFSContext {
                                         compilerOptions.compileOption);
   }
 
+  bool exists(auto &&...args) const {
+    return vfs.exists(std::forward<decltype(args)>(args)...);
+  }
+
+  auto lastWriteTime(auto &&...args) const {
+    return vfs.lastWriteTime(std::forward<decltype(args)>(args)...);
+  }
+
+  bool needsUpdate(auto &&...args) const {
+    return vfs.needsUpdate(std::forward<decltype(args)>(args)...);
+  }
+
 #define GENERATE_COMPILE_METHOD(NAME, INPUT, CAPTURE, LOGNAME, FUNC)        \
   template <ranges::range<Ref<Node>> Deps =                                 \
                 std::ranges::empty_view<Ref<Node>>>                         \
   Node &NAME(UNPACK INPUT, const Path &output,                              \
              const Deps &deps = std::views::empty<Ref<Node>>) {             \
-    addFile(output);                                                        \
+    vfs.addFile(output);                                                    \
     return collect(ctx.depGraph.addNode(                                    \
         [=, id = id++, verbose = this->ctx.verbose,                         \
          UNPACK CAPTURE](DepGraph &graph) {                                 \
@@ -170,12 +184,10 @@ struct BuilderContext::Child : public BuilderContext {
         const CtxWrapper *ctxW = nullptr)
       : BuilderContext(ctxW != nullptr ? *ctxW : *parent, compilerOptions),
         parent(*parent) {
-    vfs.merge(this->parent.vfs);
     id = this->parent.id;
   }
 
   ~Child() {
-    parent.vfs.merge(vfs);
     parent.id = id;
     std::move(futureList.begin(), futureList.end(),
               std::back_inserter(parent.futureList));
