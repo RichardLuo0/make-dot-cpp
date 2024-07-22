@@ -156,35 +156,41 @@ export class Builder {
 
   auto buildUnitList(const Context &ctx,
                      const std::unordered_set<Path> &inputSet) const {
-    std::vector<Unit> unitList;
-    unitList.reserve(inputSet.size());
-    const auto cachePath = ctx.output / cache / "units";
+    std::vector<Unit> unitList(inputSet.size());
+    FutureList futureList;
+    futureList.reserve(inputSet.size());
+    const auto unitsPath = ctx.output / cache / "units";
+    const auto compileOptionsJson = getCompileOptionsJson(ctx);
+    const auto &compileOption = getCompilerOption().compileOption;
+    int i = 0;
     for (auto &input : inputSet) {
-      const auto depJsonPath =
-          cachePath / (input.lexically_proximate(base) += ".json");
-      const auto compileOptionsJson = getCompileOptionsJson(ctx);
-      if (fs::exists(depJsonPath) &&
-          fs::last_write_time(depJsonPath) > fs::last_write_time(input) &&
-          fs::last_write_time(depJsonPath) >
-              fs::last_write_time(compileOptionsJson)) {
-        std::ifstream is(depJsonPath);
-        const auto depJson = parseJson(depJsonPath);
-        unitList
-            .emplace_back(json::value_to<Unit>(depJson))
-            // FIXME https://github.com/llvm/llvm-project/pull/99780
-            .input.make_preferred();
-      } else {
-        const auto compileOption = getCompilerOption().compileOption;
-        const auto info = ctx.compiler->getModuleInfo(input, compileOption);
-        auto &unit = unitList.emplace_back(
-            input, info.exported, info.name,
-            ctx.compiler->getIncludeDeps(input, compileOption), info.deps);
-        fs::create_directories(depJsonPath.parent_path());
-        std::ofstream os(depJsonPath);
-        os.exceptions(std::ifstream::failbit);
-        os << json::value_from(unit);
-      }
+      auto future = ctx.threadPool.post([&, i = i++](ThreadPool &) {
+        const auto depJsonPath =
+            unitsPath / (input.lexically_proximate(base) += ".json");
+        if (fs::exists(depJsonPath) &&
+            fs::last_write_time(depJsonPath) > fs::last_write_time(input) &&
+            fs::last_write_time(depJsonPath) >
+                fs::last_write_time(compileOptionsJson)) {
+          std::ifstream is(depJsonPath);
+          const auto depJson = parseJson(depJsonPath);
+          unitList[i] = json::value_to<Unit>(depJson);
+          // FIXME https://github.com/llvm/llvm-project/pull/99780
+          unitList[i].input.make_preferred();
+        } else {
+          const auto info = ctx.compiler->getModuleInfo(input, compileOption);
+          unitList[i] = Unit(input, info.exported, info.name,
+                             ctx.compiler->getIncludeDeps(input, compileOption),
+                             info.deps);
+          fs::create_directories(depJsonPath.parent_path());
+          std::ofstream os(depJsonPath);
+          os.exceptions(std::ifstream::failbit);
+          os << json::value_from(unitList[i]);
+        }
+        return 0;
+      });
+      futureList.emplace_back(std::move(future));
     }
+    futureList.get();
     return unitList;
   }
 
