@@ -15,10 +15,11 @@ export class Compiler {
  public:
   virtual ~Compiler() = default;
 
+  virtual const std::string &getName() const = 0;
+  virtual const std::string &getModuleSuffix() const = 0;
+
   virtual Compiler &addOption(const std::string &option) = 0;
   virtual Compiler &addLinkOption(const std::string &option) = 0;
-
-  virtual std::string getModuleSuffix() const = 0;
 
 #define GENERATE_COMPILE_METHOD(NAME, ARGS, PASS_ARGS) \
   virtual process::Result NAME ARGS const {            \

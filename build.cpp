@@ -58,6 +58,7 @@ extern "C" int build(const ProjectContext &ctx) {
 
         logger::success() << "Installed " << ctx.name << std::endl;
       })
+      .to("build-{1}")
       .run(ctx.argc, ctx.argv);
   return 0;
 }

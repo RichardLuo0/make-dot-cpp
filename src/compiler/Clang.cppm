@@ -29,7 +29,13 @@ export class Clang : public Compiler {
     return moduleMapStr;
   }
 
+  static constexpr std::string name = "clang";
+  static constexpr std::string moduleSuffix = ".pcm";
+
  public:
+  const std::string &getName() const override { return name; };
+  const std::string &getModuleSuffix() const override { return moduleSuffix; };
+
   Clang &addOption(const std::string &option) override {
     compileOption += ' ' + option;
     return *this;
@@ -39,8 +45,6 @@ export class Clang : public Compiler {
     linkOption += ' ' + option;
     return *this;
   };
-
-  std::string getModuleSuffix() const override { return ".pcm"; };
 
 #define GENERATE_COMPILE_METHOD(NAME, ARGS) \
   std::string NAME##Command ARGS const override
