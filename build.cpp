@@ -22,7 +22,7 @@ extern "C" int build(const ProjectContext &ctx) {
   libBuilder->setShared(true)
       .setBase("src")
       .addSrc(Glob("src/**/*.cppm"))
-      .addSrc(Glob("src/**/*.cpp"))
+      .addSrc(Glob("src/?*/*.cpp"))
       .include("src/utils");
 
   auto builder = std::make_shared<ExeBuilder>("make.cpp");
