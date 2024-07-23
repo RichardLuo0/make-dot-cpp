@@ -30,7 +30,8 @@ export class Project {
           .operator()("installPath,i", po::value<Path>(),
                       "Installation directory.")
           .operator()("debug,g", "Enable debug.")
-          .operator()("verbose,v", "Enable verbose output.");
+          .operator()("verbose,v", "Enable verbose output.")
+          .operator()("parallel,j", po::value<int>(), "Thread pool size.");
     }
 
     void add(const std::string &name, const std::string &desc) {
@@ -139,6 +140,7 @@ export class Project {
 
     APPLY_IF_HAS_VALUE("output", std::string, to(value));
     APPLY_IF_HAS_VALUE("installPath", Path, installTo(value));
+    APPLY_IF_HAS_VALUE("parallel", int, setThreadPoolSize(value));
 #undef APPLY_IF_HAS_VALUE
 
 #define APPLY_IF_CONTAINS(KEY, FUNC) \
