@@ -22,9 +22,9 @@ struct TargetProxy : public T {
               const CompilerOption *compilerOptions)
       : target(*target), ctxW(ctxW), compilerOptions(*compilerOptions) {}
 
-  std::optional<Ref<Node>> build(BuilderContext &parent) const override {
+  void build(BuilderContext &parent) const override {
     BuilderContext::Child child(&parent, &compilerOptions, ctxW);
-    return target.build(child);
+    target.build(child);
   }
 
   Path getOutput(const CtxWrapper &parent) const override {

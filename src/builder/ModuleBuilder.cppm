@@ -10,14 +10,10 @@ import makeDotCpp;
 import makeDotCpp.utils;
 
 namespace makeDotCpp {
-export struct AllModulesTarget : public CachedTarget<>, public Deps<> {
+export struct AllModulesTarget : public Target, public TargetDeps<> {
   Path getOutput(const CtxWrapper &) const override { return Path(); }
 
-  std::optional<Ref<Node>> onBuild(BuilderContext &ctx,
-                                   const Path &) const override {
-    Deps::buildNodeList(ctx);
-    return std::nullopt;
-  }
+  void build(BuilderContext &ctx) const override { TargetDeps::build(ctx); }
 };
 
 export class ModuleBuilder : public ObjBuilder, public CachedExportFactory {

@@ -41,7 +41,8 @@ export struct CtxWrapper {
 
 export struct VFS {
  protected:
-  std::unordered_set<Path> vfs;
+  std::unordered_map<Path, Ref<Node>> vfs;
+  std::unordered_set<Path> builtCache;
 
  public:
   bool exists(const Path &path) const {
@@ -68,7 +69,18 @@ export struct VFS {
     return false;
   }
 
-  void addFile(const Path &path) { vfs.emplace(path); }
+  void add(const Path &path, Node &node) { vfs.emplace(path, node); }
+
+  Node *get(const Path &path) {
+    const auto it = vfs.find(path);
+    return it != vfs.end() ? &it->second.get() : nullptr;
+  }
+
+  void addToCache(const Path &path) { builtCache.emplace(path); }
+
+  bool isCached(const Path &path) { return builtCache.contains(path); }
+
+  void clear() { vfs.clear(); }
 };
 
 export struct BuilderContext : public CtxWrapper {
@@ -77,11 +89,6 @@ export struct BuilderContext : public CtxWrapper {
 
   int id = 1;
   FutureList futureList;
-
-  Node &collect(Node &node) {
-    futureList.emplace_back(node.takeFuture());
-    return node;
-  }
 
  public:
   const CompilerOption &compilerOptions;
@@ -101,7 +108,7 @@ export struct BuilderContext : public CtxWrapper {
                                         compilerOptions.compileOption);
   }
 
-  bool exists(auto &&...args) const {
+  auto exists(auto &&...args) const {
     return vfs.exists(std::forward<decltype(args)>(args)...);
   }
 
@@ -109,17 +116,21 @@ export struct BuilderContext : public CtxWrapper {
     return vfs.lastWriteTime(std::forward<decltype(args)>(args)...);
   }
 
-  bool needsUpdate(auto &&...args) const {
-    return vfs.needsUpdate(std::forward<decltype(args)>(args)...);
+  auto isCached(auto &&...args) const {
+    return vfs.isCached(std::forward<decltype(args)>(args)...);
   }
 
 #define GENERATE_COMPILE_METHOD(NAME, INPUT, CAPTURE, LOGNAME, FUNC)        \
-  template <ranges::range<Ref<Node>> Deps =                                 \
-                std::ranges::empty_view<Ref<Node>>>                         \
-  Node &NAME(UNPACK INPUT, const Path &output,                              \
-             const Deps &deps = std::views::empty<Ref<Node>>) {             \
-    vfs.addFile(output);                                                    \
-    return collect(ctx.depGraph.addNode(                                    \
+  bool NAME(UNPACK INPUT, const Path &output,                               \
+            const ranges::range<Path> auto &deps) {                         \
+    vfs.addToCache(output);                                                 \
+    if (!vfs.needsUpdate(output, deps)) return false;                       \
+    std::deque<Ref<Node>> nodeList;                                         \
+    for (const auto &dep : deps) {                                          \
+      Node *node = vfs.get(dep);                                            \
+      if (node != nullptr) nodeList.emplace_back(*node);                    \
+    }                                                                       \
+    auto &node = ctx.depGraph.addNode(                                      \
         [=, id = id++, verbose = this->ctx.verbose,                         \
          UNPACK CAPTURE](DepGraph &graph) {                                 \
           logger::blue() << std::format("[{}] " LOGNAME ": ", id) << output \
@@ -134,7 +145,10 @@ export struct BuilderContext : public CtxWrapper {
           }                                                                 \
           return result.status;                                             \
         },                                                                  \
-        deps));                                                             \
+        nodeList);                                                          \
+    vfs.add(output, node);                                                  \
+    futureList.emplace_back(node.takeFuture());                             \
+    return true;                                                            \
   }
 
   GENERATE_COMPILE_METHOD(
@@ -153,23 +167,22 @@ export struct BuilderContext : public CtxWrapper {
        compileOption = compilerOptions.compileOption),
       "Compiling obj",
       compiler->compile(input, output, debug, moduleMap, compileOption));
-  GENERATE_COMPILE_METHOD(link, (ranges::range<Path> auto &&objList),
+  GENERATE_COMPILE_METHOD(link, (const ranges::range<Path> auto &objList),
                           (compiler = ctx.compiler, debug = ctx.debug,
                            objList = objList | ranges::to<std::vector<Path>>(),
                            linkOption = compilerOptions.linkOption),
                           "Linking",
                           compiler->link(objList, output, debug, linkOption));
-  GENERATE_COMPILE_METHOD(archive, (ranges::range<Path> auto &&objList),
+  GENERATE_COMPILE_METHOD(archive, (const ranges::range<Path> auto &objList),
                           (compiler = ctx.compiler,
                            objList = objList | ranges::to<std::vector<Path>>()),
                           "Archiving", compiler->archive(objList, output));
-  GENERATE_COMPILE_METHOD(createSharedLib, (ranges::range<Path> auto &&objList),
-                          (compiler = ctx.compiler,
-                           objList = objList | ranges::to<std::vector<Path>>(),
-                           linkOption = compilerOptions.linkOption),
-                          "Archiving",
-                          compiler->createSharedLib(objList, output,
-                                                    linkOption));
+  GENERATE_COMPILE_METHOD(
+      createSharedLib, (const ranges::range<Path> auto &objList),
+      (compiler = ctx.compiler,
+       objList = objList | ranges::to<std::vector<Path>>(),
+       linkOption = compilerOptions.linkOption),
+      "Archiving", compiler->createSharedLib(objList, output, linkOption));
 #undef GENERATE_COMPILE_METHOD
 
   struct Child;

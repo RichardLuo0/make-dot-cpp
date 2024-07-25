@@ -12,24 +12,112 @@ import boost.json;
 
 namespace makeDotCpp {
 namespace ranges {
-export template <std::ranges::range C, std::size_t N>
-class concatView : public std::ranges::view_interface<concatView<C, N>> {
- private:
-  const std::array<std::ranges::ref_view<C>, N> nested;
-  const decltype(nested | std::ranges::views::join) joined;
+export template <class C, class Item>
+concept range = std::ranges::range<C> &&
+                std::is_convertible_v<std::ranges::range_value_t<C>, Item>;
 
- public:
-  concatView(auto&&... cs)
-      : nested{cs...}, joined(nested | std::ranges::views::join) {}
-
-  auto begin() const { return joined.begin(); }
-
-  auto end() const { return joined.end(); }
+auto foreachIndex = []<std::size_t... Ids>(std::index_sequence<Ids...>,
+                                           auto&& func) {
+  (func.template operator()<Ids>() || ...);
 };
 
-export template <std::ranges::range C>
-inline auto concat(C& first, auto&&... cs) noexcept {
-  return concatView<C, 1 + sizeof...(cs)>{first, cs...};
+export template <std::ranges::view... Cs>
+  requires(sizeof...(Cs) > 0)
+class concatView : public std::ranges::view_interface<concatView<Cs...>> {
+ protected:
+  using T = std::common_type_t<std::ranges::range_value_t<Cs>...>;
+
+  struct Iterator {
+   protected:
+    const std::tuple<Cs...>* nested;
+    template <class C>
+    struct CurIt {
+      std::ranges::iterator_t<C> it;
+      std::ranges::iterator_t<C> end;
+
+      CurIt() {}
+      CurIt(const C& c) : it(c.begin()), end(c.end()) {}
+
+      bool operator==(const CurIt& other) const { return it == other.it; }
+    };
+    std::variant<CurIt<Cs>...> cur;
+    std::size_t id;  // If id is sizeof...(Cs), its the end iterator
+
+    void forwardToValidRange() {
+      while (std::visit([](auto&& cur) { return cur.it == cur.end; }, cur))
+        if (id == sizeof...(Cs) - 1) {
+          id = sizeof...(Cs);
+          break;
+        } else {
+          foreachIndex(
+              std::make_index_sequence<sizeof...(Cs) - 1>(),
+              [&]<std::size_t Id>() {
+                if (Id == id) {
+                  id = id + 1;
+                  cur.template emplace<Id + 1>(std::get<Id + 1>(*nested));
+                  return true;
+                }
+                return false;
+              });
+        }
+    }
+
+   public:
+    using value_type = T;
+    using difference_type = std::ptrdiff_t;
+
+    Iterator() = default;
+
+    template <std::size_t I>
+    Iterator(std::in_place_index_t<I>, const auto& nested)
+        : nested(&nested), id(I) {
+      if constexpr (I == sizeof...(Cs))
+        cur.template emplace<0>();
+      else {
+        cur.template emplace<I>(std::get<I>(nested));
+        forwardToValidRange();
+      }
+    }
+
+    const T& operator*() const {
+      return std::visit([](auto&& cur) -> const T& { return *cur.it; }, cur);
+    }
+
+    T* operator->() {
+      return std::visit([](auto&& cur) -> T* { return &cur.it; }, cur);
+    }
+
+    Iterator& operator++() {
+      std::visit([](auto&& cur) { ++cur.it; }, cur);
+      forwardToValidRange();
+      return *this;
+    }
+
+    Iterator operator++(int) {
+      Iterator old = *this;
+      operator++();
+      return old;
+    }
+
+    bool operator==(const Iterator& it) const {
+      return id == it.id && (cur == it.cur || id == sizeof...(Cs));
+    }
+  };
+
+  const std::tuple<Cs...> nested;
+
+ public:
+  concatView(Cs&&... views) : nested{std::move(views)...} {}
+
+  auto begin() const { return Iterator(std::in_place_index<0>, nested); }
+
+  auto end() const {
+    return Iterator(std::in_place_index<sizeof...(Cs)>, nested);
+  }
+};
+
+export inline auto concat(auto&&... cs) noexcept {
+  return concatView{std::ranges::views::all(cs)...};
 }
 
 export template <class C>
@@ -51,15 +139,14 @@ inline std::vector<Item> operator|(std::ranges::range auto&& range,
   std::ranges::copy(range.begin(), range.end(), std::back_inserter(result));
   return result;
 }
-
-export template <class C, class Item>
-concept range = std::ranges::range<C> &&
-                std::is_convertible_v<std::ranges::range_value_t<C>, Item>;
 }  // namespace ranges
 
-export template <class T>
-inline auto concat(auto&&... cs) noexcept {
-  std::vector<T> container;
+export inline auto concat(auto&&... cs) noexcept {
+  std::vector<std::common_type_t<std::ranges::range_value_t<decltype(cs)>...>>
+      container;
+  std::size_t size = 0;
+  ((size += cs.size()), ...);
+  container.reserve(size);
   auto emplace = [&](auto&& c) {
     for (const auto& e : c) {
       container.emplace_back(e);

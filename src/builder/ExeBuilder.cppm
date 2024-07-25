@@ -11,9 +11,9 @@ import makeDotCpp;
 #include "macro.hpp"
 
 namespace makeDotCpp {
-export struct ExeTarget : public CachedTarget<>,
-                          public Deps<>,
-                          public FilesDeps {
+export struct ExeTarget : public Cached<>,
+                          public TargetDeps<>,
+                          public FileDeps {
  private:
   const std::string name;
 
@@ -28,18 +28,15 @@ export struct ExeTarget : public CachedTarget<>,
     return getOutput(ctx, name);
   }
 
-  std::optional<Ref<Node>> onBuild(BuilderContext &ctx,
-                                   const Path &output) const override {
-    const auto nodeList = Deps::buildNodeList(ctx);
-    const auto depsOutput = Deps::getDepsOutput(ctx);
-    if (ctx.needsUpdate(output, depsOutput)) {
-      return ctx.link(depsOutput, output, nodeList);
-    }
-    return std::nullopt;
-  }
+  using TargetDeps<>::dependOn;
+  using FileDeps::dependOn;
 
-  using Deps<>::dependOn;
-  using FilesDeps::dependOn;
+ protected:
+  void onBuild(BuilderContext &ctx, const Path &output) const override {
+    TargetDeps::build(ctx);
+    const auto depsOutput = TargetDeps::getOutput(ctx);
+    ctx.link(depsOutput, output, depsOutput);
+  }
 };
 
 export class ExeBuilder : public ObjBuilder {

@@ -6,5 +6,4 @@ import makeDotCpp.thread;
 
 namespace makeDotCpp {
 using Node = DepGraph::Node;
-using NodeList = std::deque<Ref<Node>>;
 }  // namespace makeDotCpp

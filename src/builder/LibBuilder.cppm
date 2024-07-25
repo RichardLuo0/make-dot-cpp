@@ -12,7 +12,7 @@ import makeDotCpp.utils;
 #include "macro.hpp"
 
 namespace makeDotCpp {
-export struct LibTarget : public CachedTarget<>, public Deps<> {
+export struct LibTarget : public Cached<>, public TargetDeps<> {
  private:
   const std::string name;
   const bool isShared;
@@ -31,15 +31,12 @@ export struct LibTarget : public CachedTarget<>, public Deps<> {
     return getOutput(ctx, name, isShared);
   }
 
-  std::optional<Ref<Node>> onBuild(BuilderContext &ctx,
-                                   const Path &output) const override {
-    const auto nodeList = Deps::buildNodeList(ctx);
-    const auto depsOutput = Deps::getDepsOutput(ctx);
-    if (ctx.needsUpdate(output, depsOutput)) {
-      return isShared ? ctx.createSharedLib(depsOutput, output, nodeList)
-                      : ctx.archive(depsOutput, output, nodeList);
-    }
-    return std::nullopt;
+ protected:
+  void onBuild(BuilderContext &ctx, const Path &output) const override {
+    TargetDeps::build(ctx);
+    const auto depsOutput = TargetDeps::getOutput(ctx);
+    isShared ? ctx.createSharedLib(depsOutput, output, depsOutput)
+             : ctx.archive(depsOutput, output, depsOutput);
   }
 };
 

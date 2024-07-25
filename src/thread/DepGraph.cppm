@@ -65,7 +65,6 @@ export class DepGraph {
             if (graph.threadPool)
               for (auto& parentRef : parents)
                 parentRef.get().run(*graph.threadPool, parents.size() != 1);
-            graph.removeNode(*this);
             return ret;
           }) {
       future = task.get_future();
@@ -90,10 +89,6 @@ export class DepGraph {
   QuickRemoveList<Node> nodeList;
   std::mutex mutex;
 
-  void removeNode(Node& node) {
-    if (!nodeList.empty()) nodeList.erase(node);
-  }
-
  public:
   Node& addNode(std::function<Func>&& callable,
                 const std::ranges::range auto& depends) noexcept {
@@ -108,6 +103,11 @@ export class DepGraph {
   Node& addNode(std::function<Func>&& callable) {
     std::lock_guard lock(mutex);
     return nodeList.emplace_back(*this, std::move(callable));
+  }
+
+  void removeNode(Node& node) {
+    std::lock_guard lock(mutex);
+    nodeList.erase(node);
   }
 
   void runOn(ThreadPool& threadPool) {
