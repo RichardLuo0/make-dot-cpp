@@ -23,6 +23,10 @@
     "devPackages": [
       "std",
       "boost"
+    ],
+    "packages": [
+      "std",
+      "boost"
     ]
   }
 }

@@ -13,7 +13,11 @@ using namespace makeDotCpp;
 using namespace api;
 
 extern "C" int build(const ProjectContext &ctx) {
-  ctx.compiler->addOption("-O3 -std=c++20 -Wall -Wextra")
+  Project::OptionParser op;
+  op.parse(ctx.argc, ctx.argv);
+
+  if (!op.contains("debug")) ctx.compiler->addOption("-O3");
+  ctx.compiler->addOption("-std=c++20 -Wall -Wextra")
       .addOption("-Wno-missing-field-initializers")
       // https://github.com/llvm/llvm-project/issues/75057;
       .addOption("-Wno-deprecated-declarations");
@@ -59,6 +63,6 @@ extern "C" int build(const ProjectContext &ctx) {
         logger::success() << "Installed " << ctx.name << std::endl;
       })
       .to("build-{1}")
-      .run(ctx.argc, ctx.argv);
+      .run(op);
   return 0;
 }

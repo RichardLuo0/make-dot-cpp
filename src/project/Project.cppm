@@ -54,9 +54,7 @@ export class Project {
 
     void printHelp() const { std::cout << od << std::endl; }
 
-    const po::variable_value &operator[](const std::string &key) const {
-      return vm[key];
-    }
+    const auto &operator[](const std::string &key) const { return vm[key]; }
 
     bool contains(const std::string &key) const { return vm.contains(key); }
   };
@@ -133,7 +131,7 @@ export class Project {
   {                                         \
     auto vv = op[KEY];                      \
     if (!vv.empty()) {                      \
-      auto value = vv.as<TYPE>();           \
+      auto &value = vv.as<TYPE>();          \
       FUNC;                                 \
     }                                       \
   }
