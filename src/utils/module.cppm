@@ -172,7 +172,8 @@ export inline std::string replace(const std::string& str, const char* toReplace,
 
 export inline std::string readAsStr(const Path& path) {
   std::ifstream is(path);
-  return std::string(std::istreambuf_iterator<char>(is), {});
+  is.exceptions(std::ifstream::failbit);
+  return {std::istreambuf_iterator<char>(is), {}};
 }
 
 export inline json::value parseJson(const Path& path) {

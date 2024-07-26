@@ -100,7 +100,7 @@ class BuildFileProject {
 
   void buildLocalPackage(const Path& path) {
     const auto projectJsonPath =
-        fs::canonical(fs::is_directory(path) ? path / "project.json" : path);
+        fs::absolute(fs::is_directory(path) ? path / "project.json" : path);
     if (localPackageCache.contains(projectJsonPath)) return;
     localPackageCache.emplace(projectJsonPath);
 
@@ -115,7 +115,7 @@ class BuildFileProject {
 
   std::shared_ptr<const ExportFactory> buildGlobalPackage(const Path& path) {
     const auto projectJsonPath =
-        fs::canonical(fs::is_directory(path) ? path / "project.json" : path);
+        fs::absolute(fs::is_directory(path) ? path / "project.json" : path);
     auto it = globalPackageCache.find(projectJsonPath);
     if (it != globalPackageCache.end()) return it->second;
 
@@ -165,7 +165,7 @@ void generateCompileCommands(
   }
   const auto ccPath = ctx.output / "compile_commands.json";
   std::ofstream os(ccPath);
-  os.exceptions(std::ifstream::failbit);
+  os.exceptions(std::ofstream::failbit);
   os << array;
   logger::success() << "Built " << ccPath << std::endl;
 }

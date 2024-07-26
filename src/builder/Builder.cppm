@@ -108,7 +108,7 @@ export class Builder {
     if (!fs::exists(path) || readAsStr(path) != content) { \
       fs::create_directory(path.parent_path());            \
       std::ofstream os(path);                              \
-      os.exceptions(std::ifstream::failbit);               \
+      os.exceptions(std::ofstream::failbit);               \
       os << content;                                       \
     }                                                      \
   }                                                        \
@@ -171,9 +171,7 @@ export class Builder {
             fs::last_write_time(depJsonPath) > fs::last_write_time(input) &&
             fs::last_write_time(depJsonPath) >
                 fs::last_write_time(compileOptionsJson)) {
-          std::ifstream is(depJsonPath);
-          const auto depJson = parseJson(depJsonPath);
-          unitList[i] = json::value_to<Unit>(depJson);
+          unitList[i] = json::value_to<Unit>(parseJson(depJsonPath));
           // FIXME https://github.com/llvm/llvm-project/pull/99780
           unitList[i].input.make_preferred();
         } else {
@@ -183,7 +181,7 @@ export class Builder {
                              info.deps);
           fs::create_directories(depJsonPath.parent_path());
           std::ofstream os(depJsonPath);
-          os.exceptions(std::ifstream::failbit);
+          os.exceptions(std::ofstream::failbit);
           os << json::value_from(unitList[i]);
         }
         return 0;

@@ -35,9 +35,8 @@ export struct ProjectDesc {
   Merge<Dev> dev;
   std::shared_ptr<Usage> usage;
 
-  static ProjectDesc create(const Path& path, const Path& packagesPath) {
-    const auto projectJsonPath =
-        fs::canonical(fs::is_directory(path) ? path / "project.json" : path);
+  static ProjectDesc create(const Path& projectJsonPath,
+                            const Path& packagesPath) {
     return json::value_to<Merge<ProjectDesc>>(
         parseJson(projectJsonPath),
         PackageJsonContext{projectJsonPath.parent_path(), packagesPath});
