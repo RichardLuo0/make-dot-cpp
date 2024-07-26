@@ -24,7 +24,7 @@ export template <class T = Target>
 struct Cached : public T {
   void build(BuilderContext &ctx) const override {
     const Path output = this->getOutput(ctx);
-    if (!ctx.isCached(output)) onBuild(ctx, output);
+    if (!ctx.isBuilt(output)) onBuild(ctx, output);
   }
 
  protected:

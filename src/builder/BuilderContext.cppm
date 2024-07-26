@@ -42,16 +42,35 @@ export struct CtxWrapper {
 export struct VFS {
  protected:
   std::unordered_map<Path, Ref<Node>> vfs;
-  std::unordered_set<Path> builtCache;
+  mutable std::unordered_map<Path, std::optional<fs::file_time_type>>
+      realFileCache;
+
+  auto &realFile(const Path &path) const {
+    auto it = realFileCache.find(path);
+    if (it != realFileCache.end()) return it->second;
+    if (fs::exists(path))
+      return realFileCache.emplace(path, fs::last_write_time(path))
+          .first->second;
+    else
+      return realFileCache.emplace(path, std::nullopt).first->second;
+  }
+
+  bool realExists(const Path &path) const {
+    return realFile(path) != std::nullopt;
+  }
+
+  auto &realLastWriteTime(const Path &path) const {
+    return realFile(path).value();
+  }
 
  public:
   bool exists(const Path &path) const {
-    return vfs.contains(path) ? true : fs::exists(path);
+    return vfs.contains(path) ? true : realExists(path);
   }
 
   auto lastWriteTime(const Path &path) const {
     return vfs.contains(path) ? fs::file_time_type::max()
-                              : fs::last_write_time(path);
+                              : realLastWriteTime(path);
   }
 
   bool needsUpdate(const Path &output,
@@ -76,15 +95,12 @@ export struct VFS {
     return it != vfs.end() ? &it->second.get() : nullptr;
   }
 
-  void addToCache(const Path &path) { builtCache.emplace(path); }
-
-  bool isCached(const Path &path) { return builtCache.contains(path); }
-
   void clear() { vfs.clear(); }
 };
 
 export struct BuilderContext : public CtxWrapper {
  protected:
+  inline static std::unordered_set<Path> builtFiles;
   inline static VFS vfs;
 
   int id = 1;
@@ -116,14 +132,12 @@ export struct BuilderContext : public CtxWrapper {
     return vfs.lastWriteTime(std::forward<decltype(args)>(args)...);
   }
 
-  auto isCached(auto &&...args) const {
-    return vfs.isCached(std::forward<decltype(args)>(args)...);
-  }
+  bool isBuilt(const Path &path) const { return builtFiles.contains(path); }
 
 #define GENERATE_COMPILE_METHOD(NAME, INPUT, CAPTURE, LOGNAME, FUNC)        \
   bool NAME(UNPACK INPUT, const Path &output,                               \
             const ranges::range<Path> auto &deps) {                         \
-    vfs.addToCache(output);                                                 \
+    builtFiles.emplace(output);                                             \
     if (!vfs.needsUpdate(output, deps)) return false;                       \
     std::deque<Ref<Node>> nodeList;                                         \
     for (const auto &dep : deps) {                                          \
