@@ -32,7 +32,7 @@ extern "C" int build(const ProjectContext &ctx) {
   auto builder = std::make_shared<ExeBuilder>("make.cpp");
   builder->setBase("src").addSrc("src/main.cpp").include("src/utils");
 
-  for (auto &package : ctx.packages) {
+  for (auto &package : ctx.packages | std::views::values) {
     libBuilder->dependOn(package);
     builder->dependOn(package);
   }

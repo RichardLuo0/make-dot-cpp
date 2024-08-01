@@ -14,7 +14,8 @@ extern "C" int build(const ProjectContext &ctx) {
   ctx.compiler->addOption("-march=native -std=c++20 -Wall -Wextra");
 
   ExeBuilder builder("example");
-  builder.addSrc(Glob("src/**/*.cpp*")).dependOn(ctx.packages);
+  builder.addSrc(Glob("src/**/*.cpp*"))
+      .dependOn(ctx.packages | std::views::values);
 
   Project(ctx.name)
       .setCompiler(ctx.compiler)

@@ -109,7 +109,8 @@ class BuildFileProject {
       buildLocalPackage(path);
     }
     const std::string& name = projectDesc.name;
-    packages.emplace(buildPackage(projectDesc, ctx.output / "packages" / name,
+    packages.emplace(name,
+                     buildPackage(projectDesc, ctx.output / "packages" / name,
                                   projectJsonPath, false));
   }
 

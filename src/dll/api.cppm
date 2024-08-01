@@ -9,7 +9,7 @@ struct Compiler;
 
 namespace api {
 export using Packages =
-    std::unordered_set<std::shared_ptr<const ExportFactory>>;
+    std::unordered_map<std::string, std::shared_ptr<const ExportFactory>>;
 
 export struct ProjectContext {
   const std::string name;
