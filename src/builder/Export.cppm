@@ -44,7 +44,9 @@ export struct CachedExportFactory : public ExportFactory {
     auto it = cache.find(&ctx);
     if (it != cache.end())
       if (auto ex = it->second.lock()) return ex;
-    return cache.emplace(&ctx, onCreate(ctx)).first->second.lock();
+    const auto ex = onCreate(ctx);
+    cache.emplace(&ctx, ex);
+    return ex;
   };
 
  protected:
